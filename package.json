@@ -1,0 +1,10 @@
+{
+  "name": "cc-office",
+  "version": "0.1.0",
+  "description": "Pixel-art office + terminal status board for every Claude Code session on this machine",
+  "bin": { "cc-office": "bin/cc-office.js", "cc-fleet": "bin/cc-fleet.js" },
+  "files": ["bin", "src", "README.md"],
+  "engines": { "node": ">=16" },
+  "private": true,
+  "license": "MIT"
+}

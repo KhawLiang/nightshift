@@ -1,0 +1,1225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>cc-office</title>
+<style>
+  :root {
+    --ink:#14120f; --panel:#1c1916; --line:rgba(241,238,230,.12);
+    --text:#f1eee6; --dim:rgba(241,238,230,.55);
+    --busy:#ffb020; --idle:#3ddc97; --wait:#ff4757; --draft:#c77dff; --unk:#8b95a1;
+  }
+  * { box-sizing:border-box; }
+  html,body { height:100%; }
+  body {
+    margin:0; background:var(--ink); color:var(--text);
+    font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:13px; display:flex; flex-direction:column; overflow:hidden;
+  }
+
+  header {
+    flex:0 0 auto; display:flex; align-items:center; gap:1rem;
+    padding:.55rem .9rem; border-bottom:1px solid var(--line); background:var(--panel);
+  }
+  .brand { font-weight:700; letter-spacing:.04em; }
+  .counts { display:flex; gap:.85rem; margin-left:auto; align-items:center; }
+  .cnt { display:flex; align-items:center; gap:.35rem; color:var(--dim); }
+  .cnt b { color:var(--text); font-variant-numeric:tabular-nums; }
+  .swatch { width:8px; height:8px; border-radius:2px; display:inline-block; }
+  #fs {
+    background:transparent; border:1px solid var(--line); color:var(--dim);
+    border-radius:4px; padding:.15rem .4rem; font:inherit; font-size:12px; cursor:pointer;
+  }
+  #fs:hover { color:var(--text); border-color:var(--dim); }
+  .beat { width:7px; height:7px; border-radius:50%; background:var(--idle);
+          opacity:.25; transition:opacity .15s; }
+  .beat.on { opacity:1; }
+
+  #stage { flex:1 1 auto; position:relative; display:flex;
+           align-items:center; justify-content:center; padding:14px; min-height:0; }
+  #frame { position:relative; }
+  canvas { display:block; image-rendering:pixelated; image-rendering:crisp-edges;
+           border-radius:5px; box-shadow:0 14px 46px rgba(0,0,0,.6); }
+  #overlay { position:absolute; inset:0; pointer-events:none; }
+
+  .plate {
+    position:absolute; transform:translate(-50%,0); white-space:nowrap;
+    text-align:center; line-height:1.3; pointer-events:auto; cursor:pointer;
+  }
+  .plate .nm { font-weight:700; font-size:11px; letter-spacing:.01em;
+               text-shadow:0 1px 2px rgba(0,0,0,.75); }
+  .plate .sub { font-size:9px; color:var(--dim); text-shadow:0 1px 2px rgba(0,0,0,.75); }
+  .plate:hover .nm { text-decoration:underline; text-underline-offset:2px; }
+
+  .roomtag {
+    position:absolute; transform:translate(-50%,-50%); white-space:nowrap;
+    display:flex; align-items:center; gap:.45rem; pointer-events:none;
+  }
+  .roomtag .rn { font-weight:700; font-size:11px; letter-spacing:.08em;
+                 text-transform:uppercase; text-shadow:0 1px 2px rgba(0,0,0,.8); }
+  .roomtag .rc { font-size:9px; color:var(--dim); }
+
+  .bubble {
+    position:absolute; transform:translate(-50%,-100%);
+    max-width:190px; padding:.3rem .45rem; border-radius:5px;
+    font-size:10px; line-height:1.35; white-space:normal; word-break:break-word;
+    background:#2a2233; border:1px solid var(--draft); color:#efe4f6;
+    box-shadow:0 3px 12px rgba(0,0,0,.5);
+  }
+  .bubble:after {
+    content:""; position:absolute; left:50%; bottom:-5px; margin-left:-4px;
+    width:0; height:0; border:4px solid transparent; border-top-color:var(--draft);
+  }
+  .bubble .tag { display:block; color:var(--draft); font-size:8px;
+                 letter-spacing:.1em; text-transform:uppercase; margin-bottom:2px; }
+
+  #tip {
+    position:fixed; z-index:9; max-width:340px; padding:.5rem .6rem;
+    background:#221e1a; border:1px solid var(--line); border-radius:6px;
+    font-size:11px; line-height:1.5; box-shadow:0 8px 28px rgba(0,0,0,.6);
+    display:none; pointer-events:none;
+  }
+  #tip .k { color:var(--dim); }
+  #tip .snip { color:var(--dim); margin-top:.3rem; display:block;
+               max-height:3.6em; overflow:hidden; }
+
+  #toast {
+    position:fixed; left:50%; bottom:22px; transform:translate(-50%,14px);
+    background:#efe9dd; color:#14120f; padding:.45rem .8rem; border-radius:6px;
+    font-size:11px; font-weight:700; opacity:0; transition:opacity .18s, transform .18s;
+    pointer-events:none; z-index:10;
+  }
+  #toast.on { opacity:1; transform:translate(-50%,0); }
+
+  #empty { position:absolute; inset:0; display:none; align-items:center;
+           justify-content:center; color:var(--dim); font-size:12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="brand">cc-office</span>
+  <span style="color:var(--dim)" id="hint">click a desk to focus that tmux window</span>
+  <span class="counts" id="counts"></span>
+  <button id="fs" title="fullscreen (f)">&#9974;</button>
+  <span class="beat" id="beat"></span>
+</header>
+
+<div id="stage">
+  <div id="frame">
+    <canvas id="cv"></canvas>
+    <div id="overlay"></div>
+  </div>
+  <div id="empty">nobody's in the office &mdash; no Claude Code sessions running</div>
+</div>
+
+<div id="tip"></div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ---------- palette ---------- */
+const C = {
+  wall:"#7d8b93", wallHi:"#93a1a8", wallLo:"#6a777e",
+  rail:"#5b666c", wains:"#66727a", wainsHi:"#78848c", skirt:"#4c565b",
+  floorA:"#7a6650", floorB:"#7f6b55", floorC:"#75614c", seam:"#6a5744",
+  rug:"#4a4a52", rugHi:"#5a5a64", rugEdge:"#3a3a41", rugMid:"#525260",
+  deskTop:"#ad8a61", deskHi:"#c2a077", deskFace:"#8e6d4a", deskLo:"#7a5c3d",
+  deskLeg:"#6b5035",
+  chair:"#3b4149", chairHi:"#4b535c", chairLo:"#2e333a", wheel:"#23262b",
+  bezel:"#23272c", bezelHi:"#343a41", bezelLo:"#17191d", screenOff:"#101820",
+  keys:"#33383e", keyTop:"#464c53", metal:"#98a1a7",
+  plant:"#4a7a52", plantHi:"#65975f", plantLo:"#39603f", pot:"#a2603f", potHi:"#bb7449",
+  cooler:"#d3dde0", coolerTop:"#7fb3c4", board:"#e8e4d8", boardEdge:"#b6b0a0",
+  paper:"#e5e0d2", ink:"#14120f", shadow:"rgba(0,0,0,.26)",
+  couch:"#7a5a52", couchHi:"#8f6b61", couchLo:"#5e453f",
+  print:"#c9cfd2", printHi:"#e2e7e9", printLo:"#8f979b",
+  busy:"#ffb020", idle:"#3ddc97", wait:"#ff4757", draft:"#c77dff", unk:"#8b95a1"
+};
+const SKIN  = ["#eec09a","#d9a377","#b07d53","#8d5a3b","#f2d3b4","#6b4630"];
+const HAIR  = ["#2b241e","#5f3b22","#c9a227","#8c3b2e","#39557a","#7a4f7d","#d9d3c8","#43302a"];
+const SHIRT = ["#4a7a8c","#7a5c8c","#8c6b4a","#4a8c63","#8c4a5c","#5c6b8c","#6b7a4a","#8c5a3f"];
+const MUG   = ["#d9534f","#4f8fd9","#e0c14f","#e8e4d8","#5fae7a"];
+
+/* ---------- geometry (high-res pixel grid) ---------- */
+let W = 1024;
+let BLD = { x:0, y:0, w:1024, h:400 };
+const DW = 150, ROWH = 224;
+const ROOM = { wallH:140, pad:18, gap:16, deskGap:26, maxCols:3, seatY:46, tail:136 };
+const LOUNGE = 96;
+const URG = { waiting:0, draft:1, idle:2, busy:3, unknown:4 };
+let H = 460, DT = 16;
+
+const cv = document.getElementById("cv");
+let ctx = cv.getContext("2d");
+const overlay = document.getElementById("overlay");
+const frame = document.getElementById("frame");
+const tip = document.getElementById("tip");
+
+/* ---------- tiny pixel toolkit ---------- */
+function px(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(x|0,y|0,w|0,h|0); }
+function rrect(x,y,w,h,r,c){                       // rounded block, pixel style
+  px(x+r,y,w-2*r,h,c); px(x,y+r,w,h-2*r,c);
+  if (r>1) { px(x+1,y+1,r-1,r-1,c); px(x+w-r,y+1,r-1,r-1,c);
+             px(x+1,y+h-r,r-1,r-1,c); px(x+w-r,y+h-r,r-1,r-1,c); }
+}
+function frameRect(x,y,w,h,c){ px(x,y,w,1,c); px(x,y+h-1,w,1,c); px(x,y,1,h,c); px(x+w-1,y,1,h,c); }
+function alphaBlock(x,y,w,h,c,a){ ctx.globalAlpha=a; px(x,y,w,h,c); ctx.globalAlpha=1; }
+function hash(s){ let h=2166136261; for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);} return h>>>0; }
+function tone(hex,f){                              // darken (<1) / lighten (>1)
+  const n = parseInt(hex.slice(1),16);
+  const cl = v => Math.max(0, Math.min(255, Math.round(v)));
+  const r = cl(((n>>16)&255)*f), g = cl(((n>>8)&255)*f), b = cl((n&255)*f);
+  return "#" + ((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1);
+}
+function stateColor(s){ return s==="busy"?C.busy:s==="idle"?C.idle:s==="waiting"?C.wait:s==="draft"?C.draft:C.unk; }
+
+/* ---------- live model ---------- */
+let sessions = [];
+let rooms = [];
+let lastT = 0;
+
+/* one room per tmux session: agents sharing a tmux name share an office */
+function groupKey(s){
+  return (s.where && s.where !== "-") ? s.where.split(":")[0] : (s.name || "?");
+}
+function packRooms(list, CW){
+  const byKey = new Map();
+  for (const s of list) {
+    const k = groupKey(s);
+    if (!byKey.has(k)) byKey.set(k, []);
+    byKey.get(k).push(s);
+  }
+  const keys = [...byKey.keys()].sort();
+  const out = [];
+  let x = ROOM.gap, y = ROOM.gap, bandH = 0, bandFrom = 0, widest = 0;
+  const centreBand = (from, to, endX)=>{                 // slide the band into the middle
+    const shift = Math.round((CW - (endX - ROOM.gap)) / 2) - ROOM.gap;
+    if (shift <= 0) return;
+    for (let i=from; i<to; i++) {
+      out[i].x += shift;
+      for (const st of out[i].seats) st.x += shift;
+    }
+  };
+  for (const k of keys) {
+    const members = byKey.get(k).slice()
+      .sort((a,b)=> (a.where+a.name) < (b.where+b.name) ? -1 : 1);   // stable seats
+    const cols = Math.min(members.length, ROOM.maxCols);
+    const rws  = Math.ceil(members.length / cols);
+    const w = cols*DW + (cols-1)*ROOM.deskGap + ROOM.pad*2;
+    const h = ROOM.wallH + ROOM.seatY + (rws-1)*ROWH + ROOM.tail;
+    if (x > ROOM.gap && x + w > CW - ROOM.gap) {
+      centreBand(bandFrom, out.length, x);
+      bandFrom = out.length; x = ROOM.gap; y += bandH + ROOM.gap; bandH = 0;
+    }
+    const seats = members.map((m,i)=>({
+      s: m,
+      x: x + ROOM.pad + (i % cols)*(DW + ROOM.deskGap),
+      y: y + ROOM.wallH + ROOM.seatY + ((i / cols)|0)*ROWH
+    }));
+    let worst = 9;
+    for (const m of members) worst = Math.min(worst, URG[m.state] === undefined ? 4 : URG[m.state]);
+    const urgState = Object.keys(URG).find(kk=>URG[kk]===worst) || "unknown";
+    out.push({ key:k, x, y, w, h, cols, rows:rws, seats, members, urg:stateColor(urgState) });
+    x += w + ROOM.gap;
+    bandH = Math.max(bandH, h); widest = Math.max(widest, w);
+  }
+  centreBand(bandFrom, out.length, x);
+  return { rooms: out, H: Math.max(420, y + bandH + ROOM.gap + LOUNGE), wide: widest };
+}
+
+/* choose the canvas width whose packing best matches the window's shape */
+function buildRooms(list){
+  for (const k of [...games.keys()]) if (!list.some(m=>m.name === k)) games.delete(k);
+  if (!list.length) { rooms = []; H = 420; return; }
+  const stage = document.getElementById("stage");
+  const availW = Math.max(320, stage.clientWidth - 28);
+  const availH = Math.max(240, stage.clientHeight - 28);
+  const target = (availW / availH) * .94;   // margins add width back
+  const probe = packRooms(list, 4000);                  // widest single room
+  const floorW = Math.max(720, probe.wide + ROOM.gap*2);
+  let best = null;
+  for (let cand = floorW; cand <= floorW + 3200; cand += 40) {
+    const r = packRooms(list, cand);
+    const err = Math.abs(Math.log((cand / r.H) / target));
+    if (!best || err < best.err) best = { err, W: cand, rooms: r.rooms, H: r.H };
+    if (cand / r.H > target * 1.8) break;
+  }
+  const mx = Math.max(70, Math.min(330, Math.round(best.W * .13)));
+  const mt = Math.max(48, Math.min(190, Math.round(best.H * .11)));
+  const mb = Math.max(30, Math.min(120, Math.round(best.H * .07)));
+  for (const r of best.rooms) {
+    r.x += mx; r.y += mt;
+    for (const st of r.seats) { st.x += mx; st.y += mt; }
+  }
+  W = best.W + mx*2; H = best.H + mt + mb;
+  BLD = { x: mx - 12, y: mt - 12, w: best.W + 24, h: best.H + 24 };
+  rooms = best.rooms;
+}
+function resize(){
+  if (cv.height !== H || cv.width !== W) { cv.width = W; cv.height = H; }
+  const stage = document.getElementById("stage");
+  const avail = { w: stage.clientWidth - 28, h: stage.clientHeight - 28 };
+  let scale = Math.min(avail.w / W, avail.h / H);
+  if (scale >= 2) scale = Math.floor(scale);        // keep whole pixels when there is room
+  scale = Math.max(.5, Math.min(3, scale));
+  frame.style.width = (W*scale) + "px";
+  frame.style.height = (H*scale) + "px";
+  cv.style.width = (W*scale) + "px";
+  cv.style.height = (H*scale) + "px";
+  return scale;
+}
+
+/* ---------- scenery ---------- */
+function skyColors(){
+  const d = new Date(), h = d.getHours() + d.getMinutes()/60;
+  if (h < 5.5)  return ["#101828","#1d2942","#0d1220"];
+  if (h < 7.5)  return ["#3f4d70","#d09070","#2a3450"];
+  if (h < 17)   return ["#5f9dc4","#b3d8e6","#3d6f92"];
+  if (h < 19.5) return ["#bd6f4c","#f0bb75","#7a4a45"];
+  if (h < 21)   return ["#3a4568","#6f5875","#262d47"];
+  return ["#101828","#1d2942","#0d1220"];
+}
+
+/* ---------- the night city behind the building ---------- */
+let bgCanvas = null, bgKey = "", bgBlinks = [], bgNeon = [];
+
+function bgTowers(baseY, minH, maxH, minW, maxW, body, edge, lit, litRate, gap, neon){
+  let x = -30, i = 0;
+  while (x < W + 30) {
+    const s = hash("bg" + body + i);
+    const tw = minW + (s % (maxW - minW));
+    const th = minH + ((s>>>6) % (maxH - minH));
+    const top = baseY - th;
+    px(x, top, tw, th, body);
+    px(x, top, tw, 2, edge);
+    px(x + tw - 3, top, 3, th, tone(body, .78));
+    if (s % 4 === 0) { px(x+3, top-4, tw-6, 4, tone(body,1.1)); }          // parapet
+    if (s % 5 === 1) { px(x + (tw>>1) - 8, top-9, 16, 9, tone(body,.9));   // rooftop box
+                       px(x + (tw>>1) - 6, top-13, 4, 5, tone(body,.9)); }
+    if (s % 3 === 0) {                                                      // antenna + blinker
+      const ax = x + (tw>>1) - 1, ay = top - 22;
+      px(ax, ay, 2, 22, tone(body,1.15));
+      bgBlinks.push({ x: ax-1, y: ay-3, p: (s % 7) * 380 });
+    }
+    for (let wy = top + 7; wy < baseY - 8; wy += 8)
+      for (let wx = x + 4; wx < x + tw - 6; wx += 7) {
+        const k = hash("bw" + wx + "_" + wy);
+        if ((k % 100) < litRate) {
+          const c = (k % 11 === 0) ? "#bcd6ff" : ((k % 7 === 0) ? "#fff0c0" : lit);
+          px(wx, wy, 4, 4, c);
+          alphaBlock(wx-1, wy-1, 6, 6, c, .12);
+        }
+      }
+    if (neon && s % 6 === 2) {                                              // neon sign on the facade
+      const nc = ["#ff4d8d","#4fe1ff","#ffd24f","#8f6bff"][(s>>>3) % 4];
+      const nx = x + 4, ny = top + 16 + ((s>>>9) % Math.max(8, th - 40));
+      const nw = Math.max(8, tw - 10);
+      bgNeon.push({ x:nx, y:ny, w:nw, c:nc, p:(s % 5) * 500 });
+      px(nx, ny, nw, 3, nc); alphaBlock(nx-2, ny-3, nw+4, 9, nc, .22);
+    }
+    x += tw + gap + (s % 12);
+    i++;
+  }
+}
+
+function backdropCity(){
+  const P = rainyPalette();
+  const key = W + "x" + H + "/" + P.sky[0];
+  if (bgCanvas && bgKey === key) return bgCanvas;
+  const c = document.createElement("canvas"); c.width = W; c.height = H;
+  const main = ctx; ctx = c.getContext("2d");
+  bgBlinks = []; bgNeon = [];
+  const night = P.night;
+  const sky = night ? ["#05070f","#0b1226","#1b1b3a","#3a2444"] : ["#38404d","#4d5765","#6b7280","#8b8778"];
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,sky[0]); g.addColorStop(.42,sky[1]); g.addColorStop(.78,sky[2]); g.addColorStop(1,sky[3]);
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+
+  const horizon = H - LOUNGE;
+  for (let i=0;i<9;i++) {                                    // low cloud bands lit from below
+    const s = hash("cl"+i);
+    const cy = 20 + (s % Math.max(40, (horizon*.55)|0));
+    const cw = 180 + (s % 320), cx = (s>>>7) % Math.max(1, W);
+    alphaBlock(cx, cy, cw, 14 + (s%16), night ? "#2a2b4d" : "#9aa2ad", .30);
+    alphaBlock(cx+20, cy-8, cw-60, 10, night ? "#232445" : "#aab2bd", .22);
+  }
+  const gl = ctx.createLinearGradient(0,horizon-150,0,horizon);
+  gl.addColorStop(0,"rgba(0,0,0,0)"); gl.addColorStop(1, night ? "rgba(255,175,95,.26)" : "rgba(255,255,255,.12)");
+  ctx.fillStyle = gl; ctx.fillRect(0,horizon-150,W,150);
+
+  const cap = h => Math.min(h, Math.max(90, (H*.62)|0));
+  bgTowers(horizon - 16, 50, cap(150), 16, 34, night?"#0e1730":"#4a5462", night?"#16224a":"#5b6674", "#ffd88a", 18, 5, false);
+  bgTowers(horizon - 6,  80, cap(230), 26, 52, night?"#0a1024":"#3b4450", night?"#121a3a":"#4a5462", "#ffcf7a", 26, 7, true);
+  bgTowers(horizon + 4, 110, cap(320), 40, 78, night?"#05080f":"#2b323c", night?"#0c1224":"#39404b", "#ffc46a", 20, 12, true);
+
+  alphaBlock(0, horizon-8, W, 8, night ? "#1a1330" : "#6b7280", .40);
+  ctx = main; bgCanvas = c; bgKey = key;
+  return c;
+}
+
+/* ---------- the city outside: always raining ---------- */
+function rainyPalette(){
+  const hr = new Date().getHours(), night = hr >= 19 || hr < 6;
+  return night
+    ? { night:true,  sky:["#141b2b","#20293f","#0c1119"], tower:"#0d1422",
+        towerB:"#161f33", lit:"#ffd88a" }
+    : { night:false, sky:["#59626e","#79838f","#3d444e"], tower:"#2f3742",
+        towerB:"#3d4653", lit:"#e6dcb2" };
+}
+let cityTile = null, cityKey = "";
+function drawTowers(x0, baseY, w, P, near){
+  let x = x0 - 24, i = 0;
+  const col = near ? P.towerB : P.tower;
+  while (x < x0 + w) {
+    const s = hash("tw" + (near?"n":"f") + i);
+    const tw = (near ? 20 : 14) + (s % (near ? 26 : 18));
+    const th = (near ? 22 : 14) + ((s>>>5) % (near ? 40 : 30));
+    px(x, baseY - th, tw, th, col);
+    px(x, baseY - th, tw, 2, tone(col, 1.35));
+    px(x + tw - 2, baseY - th, 2, th, tone(col, .8));
+    if (s % 5 === 0) { px(x + (tw>>1) - 1, baseY - th - 10, 2, 10, col);
+                       px(x + (tw>>1) - 2, baseY - th - 12, 4, 3, "#ff5a5a"); }
+    for (let wy = baseY - th + 6; wy < baseY - 5; wy += 6)
+      for (let wx = x + 3; wx < x + tw - 4; wx += 5) {
+        const k = hash("w" + wx + "," + wy);
+        if ((k % 10) < (near ? 5 : 4)) px(wx, wy, 3, 3, k % 3 ? P.lit : tone(P.lit, .8));
+      }
+    x += tw + 3 + (s % 9); i++;
+  }
+}
+function city(){                                   // cached: towers are static, rain is not
+  const P = rainyPalette(), key = P.sky[0] + P.lit;
+  if (cityTile && cityKey === key) return cityTile;
+  const c = document.createElement("canvas"); c.width = 640; c.height = 72;
+  const main = ctx; ctx = c.getContext("2d");
+  ctx.globalAlpha = .7; drawTowers(0, 72, 640, P, false); ctx.globalAlpha = 1;  // far layer, hazier
+  drawTowers(0, 72, 640, P, true);
+  ctx = main; cityTile = c; cityKey = key;
+  return c;
+}
+function drawRain(x,y,w,h,t,n,alpha,speed){
+  ctx.globalAlpha = alpha; ctx.fillStyle = "#d5e4f2";
+  for (let i=0;i<n;i++){
+    const s = hash("rn"+i);
+    const rx = x + (s % w);
+    const ry = y + (((s>>>9) % (h+30)) + (t/1000)*(speed + (s%140))) % (h+30) - 15;
+    const len = 4 + (s % 4);
+    if (ry + len > y && ry < y + h) {
+      ctx.fillRect(rx|0, Math.max(y,ry)|0, 1, Math.min(len, y+h-ry)|0);
+      ctx.fillRect((rx-1)|0, Math.max(y,ry+len)|0, 1, Math.min(3, y+h-ry-len)|0);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+function lightning(t){                              // rare flash, same for every window
+  const per = 13000, k = t % per;
+  if (k > 260) return 0;
+  return k < 90 ? k/90 : (k < 150 ? 1 : Math.max(0, 1 - (k-150)/110)) * .8;
+}
+
+function drawWindow(wx,wy,ww,wh,t){
+  const P = rainyPalette();
+  t = t || 0;
+  px(wx-6,wy-6,ww+12,wh+14,C.bezelLo);                      // outer frame
+  px(wx-4,wy-4,ww+8,wh+10,"#cfd6d3");
+  px(wx-4,wy-4,ww+8,2,"#e6ebe7");
+
+  ctx.save(); ctx.beginPath(); ctx.rect(wx,wy,ww,wh); ctx.clip();
+  const g = ctx.createLinearGradient(0,wy,0,wy+wh);
+  g.addColorStop(0,P.sky[0]); g.addColorStop(.55,P.sky[1]); g.addColorStop(1,P.sky[2]);
+  ctx.fillStyle = g; ctx.fillRect(wx,wy,ww,wh);
+
+  const tile = city(), cw = Math.min(ww,600), off = hash("c"+wx+wy) % (640 - cw);
+  ctx.drawImage(tile, off, Math.max(0,72-wh), cw, Math.min(wh,72), wx, wy+Math.max(0,wh-72), cw, Math.min(wh,72));
+
+  const fl = lightning(t);
+  if (fl > 0) alphaBlock(wx,wy,ww,wh,"#cfe0f5", fl*.55);
+  alphaBlock(wx,wy+wh-8,ww,8,P.sky[2],.35);
+  drawRain(wx,wy,ww,wh,t, Math.max(10,(ww*wh)/95|0), .30, 620);
+  for (let i=0;i<7;i++){                                    // drops running down the glass
+    const s2 = hash("dp"+wx+i);
+    const dx2 = wx + 3 + (s2 % Math.max(1,ww-6));
+    const dy2 = wy + ((s2>>>7) % wh + (t/1000)*(14 + s2%22)) % wh;
+    alphaBlock(dx2, dy2|0, 1, 3+(s2%4), "#e8f2ff", .30);
+    alphaBlock(dx2, (dy2|0)+4, 1, 1, "#ffffff", .18);
+  }
+  ctx.globalAlpha=.08; ctx.fillStyle="#ffffff";              // reflection on the pane
+  ctx.beginPath(); ctx.moveTo(wx,wy+wh); ctx.lineTo(wx+ww*.42,wy);
+  ctx.lineTo(wx+ww*.66,wy); ctx.lineTo(wx+ww*.16,wy+wh); ctx.closePath(); ctx.fill();
+  ctx.globalAlpha=1;
+  ctx.restore();
+
+  px(wx+((ww/2)|0)-1,wy,3,wh,"#cfd6d3"); px(wx,wy+((wh/2)|0)-1,ww,3,"#cfd6d3");
+  px(wx-8,wy+wh+4,ww+16,5,"#b9c0bd"); px(wx-8,wy+wh+4,ww+16,2,"#d7dcd8");   // sill
+  if (fl > 0) alphaBlock(wx-10,wy+wh+9,ww+20,10,"#cfe0f5",fl*.25);
+}
+
+function drawBoard(x,y,w,h,t){
+  px(x-4,y-4,w+8,h+8,C.boardEdge); px(x-3,y-3,w+6,3,"#cfc9b8");
+  px(x,y,w,h,C.board);
+  alphaBlock(x,y,w,h/2,"#ffffff",.25);
+  // scribbles: a couple of lists and a small bar chart
+  const lines = [[10,12,58],[10,20,84],[10,28,44],[10,36,72],[10,44,52],[10,52,66]];
+  lines.forEach(([a,b,ln],i)=>{
+    px(x+a,y+b,3,3, i%2 ? "#7f8a90" : "#c05a4a");
+    px(x+a+7,y+b+1,ln,2, i%2 ? "#8f9aa0" : "#6f7a80");
+  });
+  const bars = [14,26,20,34,28];
+  bars.forEach((bh,i)=> px(x+w-58+i*11, y+h-14-bh, 7, bh, i===3 ? "#5f8fae" : "#9aa8ae"));
+  px(x+w-62,y+h-13,60,2,"#8f9aa0");
+  px(x-4,y+h+4,w+8,4,C.boardEdge);                   // marker tray
+  px(x+12,y+h+3,14,3,"#c05a4a"); px(x+32,y+h+3,14,3,"#5f8fae");
+  const nx = x+w-30, ny = y+8;                       // sticky note
+  px(nx,ny,22,22,"#e8d267"); px(nx,ny,22,3,"#f2e08a");
+  px(nx+4,ny+7,14,2,"#a8933f"); px(nx+4,ny+12,10,2,"#a8933f");
+}
+
+function drawClock(cx,cy,r){
+  const t = new Date();
+  ctx.fillStyle = C.bezelLo; ctx.beginPath(); ctx.arc(cx,cy,r+2,0,7); ctx.fill();
+  ctx.fillStyle = C.boardEdge; ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fill();
+  ctx.fillStyle = C.board;     ctx.beginPath(); ctx.arc(cx,cy,r-3,0,7); ctx.fill();
+  for (let i=0;i<12;i++){
+    const a = i/12*Math.PI*2;
+    px(cx + Math.sin(a)*(r-6) - 1, cy - Math.cos(a)*(r-6) - 1, 2, 2, i%3 ? "#9aa3a8" : C.ink);
+  }
+  const hand = (ang,len,wdt,col)=>{ ctx.strokeStyle=col; ctx.lineWidth=wdt; ctx.lineCap="butt";
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+Math.sin(ang)*len, cy-Math.cos(ang)*len); ctx.stroke(); };
+  hand(((t.getHours()%12)+t.getMinutes()/60)/12*Math.PI*2, r-10, 3, C.ink);
+  hand(t.getMinutes()/60*Math.PI*2, r-5, 2, C.ink);
+  hand(t.getSeconds()/60*Math.PI*2, r-4, 1, "#c05a4a");
+  px(cx-1,cy-1,2,2,C.ink);
+}
+
+function drawPoster(x,y,w,h){
+  px(x-3,y-3,w+6,h+6,"#3c342c"); px(x,y,w,h,"#1e2630");
+  const g = ctx.createLinearGradient(0,y,0,y+h);
+  g.addColorStop(0,"#2a3a4e"); g.addColorStop(1,"#131a24");
+  ctx.fillStyle=g; ctx.fillRect(x,y,w,h);
+  px(x+10,y+h-26,w-20,26,"#20303a");                 // hills
+  px(x+4,y+h-16,w-8,16,"#182630");
+  ctx.fillStyle="#dc9e59"; ctx.beginPath(); ctx.arc(x+w/2,y+30,13,0,7); ctx.fill();
+  alphaBlock(x+6,y+8,w-12,3,"#dc9e59",.35);
+  for (let i=0;i<7;i++) px(x+8+i*9, y+h-30-((i*5)%12), 3, 3, "#8fb0c4");
+}
+
+function drawDecor(kind, cx, cy, t){          // one wall ornament centred on (cx,cy)
+  if (kind === "win")         drawWindow(cx-58, cy-21, 116, 42, t);
+  else if (kind === "board")  drawBoard(cx-56, cy-21, 112, 42, t);
+  else if (kind === "poster") drawPoster(cx-34, cy-23, 68, 46);
+  else if (kind === "clock")  drawClock(cx, cy, 20);
+  else if (kind === "shelf") {                 // a shelf of binders
+    px(cx-40, cy+16, 80, 5, C.deskFace); px(cx-40, cy+16, 80, 2, C.deskTop);
+    const cols2 = ["#a85c4a","#4f6f8a","#5f8f6a","#c9a227","#7a5c8c","#b06a4a"];
+    for (let i=0;i<9;i++) px(cx-36+i*8, cy+16-16-((i*5)%8), 6, 16+((i*5)%8), cols2[i%6]);
+  }
+}
+
+function drawRoomWall(r,t){
+  const g = ctx.createLinearGradient(0,r.y+24,0,r.y+ROOM.wallH);
+  g.addColorStop(0,C.wallHi); g.addColorStop(.6,C.wall); g.addColorStop(1,C.wallLo);
+  ctx.fillStyle = g; ctx.fillRect(r.x, r.y, r.w, ROOM.wallH);
+  const wb = r.y + ROOM.wallH;
+  px(r.x, wb-30, r.w, 30, C.wains);                       // wainscot
+  px(r.x, wb-30, r.w, 2, C.rail); px(r.x, wb-28, r.w, 1, C.wainsHi);
+  for (let x=r.x+8; x<r.x+r.w-40; x+=52) { alphaBlock(x,wb-24,42,16,"#000000",.05);
+    frameRect(x,wb-24,42,16,tone(C.wains,.93)); }
+  px(r.x, wb-8, r.w, 8, C.skirt); px(r.x, wb-8, r.w, 2, tone(C.skirt,1.25));
+
+  const extra = ["board","poster","clock","shelf"];
+  const cy = r.y + 62, h1 = hash(r.key);
+  if (r.w < 300) {
+    drawDecor("win", r.x + r.w/2, cy, t);
+  } else {
+    const left = (h1 % 2) === 0;
+    drawDecor("win", r.x + r.w*(left ? .30 : .70), cy, t);
+    drawDecor(extra[(h1>>>5) % extra.length], r.x + r.w*(left ? .70 : .30), cy, t);
+  }
+  px(r.x, wb, r.w, 2, tone(C.skirt,.6));
+  alphaBlock(r.x, wb+2, r.w, 9, "#000000", .20);
+}
+
+function drawRoomFloor(r){
+  const top = r.y + ROOM.wallH;
+  px(r.x, top, r.w, r.h - ROOM.wallH, C.floorA);
+  const plank = 30;
+  for (let y=top, i=0; y<r.y+r.h; y+=plank, i++) {
+    px(r.x, y, r.w, Math.min(plank, r.y+r.h-y), i%3===0 ? C.floorB : (i%3===1 ? C.floorA : C.floorC));
+    alphaBlock(r.x, y, r.w, 1, "#000000", .07);
+    alphaBlock(r.x, y+1, r.w, 1, "#ffffff", .05);
+    for (let x=r.x+((i%2)?70:10); x<r.x+r.w; x+=190) alphaBlock(x, y+2, 1, plank-2, "#000000", .05);
+  }
+  for (let i=0; i<r.rows; i++) {                          // rug under each row of desks
+    const dy = r.y + ROOM.wallH + ROOM.seatY + i*ROWH;
+    const ry = dy+58, rh = 58, rx = r.x+8, rw = r.w-16;
+    alphaBlock(rx-2,ry-2,rw+4,rh+4,"#000000",.16);
+    px(rx,ry,rw,rh,C.rug); px(rx,ry,rw,2,C.rugHi);
+    frameRect(rx,ry,rw,rh,C.rugEdge); frameRect(rx+5,ry+5,rw-10,rh-10,C.rugMid);
+    frameRect(rx+7,ry+7,rw-14,rh-14,C.rugHi);
+    for (let x=rx+16; x<rx+rw-16; x+=22) { px(x,ry+rh/2-4,8,8,C.rugMid); px(x+2,ry+rh/2-2,4,4,C.rugHi); }
+  }
+  drawPlant(r.x + r.w - 34, r.y + r.h - 42, 1);           // corner plant
+}
+
+function drawRoom(r,t){
+  const fc = "#5f666d", fcHi = "#7b838b", door = 46, dx0 = r.x + r.w - door - 24;
+  alphaBlock(r.x+4, r.y+8, r.w+4, r.h+2, "#000000", .40);            // the room casts a shadow
+  ctx.save();
+  ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+  drawRoomFloor(r); drawRoomWall(r,t);
+  for (const seat of r.seats) drawStation(seat.x, seat.y, seat.s, t);
+  ctx.restore();
+
+  px(r.x-5, r.y-5, r.w+10, 5, fc); px(r.x-5, r.y-5, r.w+10, 2, fcHi);  // walls, cutaway view
+  px(r.x-5, r.y, 5, r.h, fc); px(r.x+r.w, r.y, 5, r.h, fc);
+  px(r.x-5, r.y, 2, r.h, fcHi); px(r.x+r.w, r.y, 2, r.h, fcHi);
+  px(r.x-5, r.y+r.h, dx0-(r.x-5), 5, fc);                              // bottom wall + doorway
+  px(dx0+door, r.y+r.h, (r.x+r.w+5)-(dx0+door), 5, fc);
+  px(r.x-5, r.y+r.h, dx0-(r.x-5), 2, fcHi);
+  px(dx0+door, r.y+r.h, (r.x+r.w+5)-(dx0+door), 2, fcHi);
+  px(dx0-4, r.y+r.h-2, 4, 8, fcHi); px(dx0+door, r.y+r.h-2, 4, 8, fcHi);
+  px(dx0+7, r.y+r.h-13, door-14, 11, C.rugEdge);                       // doormat
+  frameRect(dx0+7, r.y+r.h-13, door-14, 11, C.rugMid);
+  frameRect(r.x-6, r.y-6, r.w+12, r.h+12, "#191d22");
+
+  px(r.x, r.y, r.w, 24, "#1d232b");                                    // room header band
+  alphaBlock(r.x, r.y, r.w, 24, r.urg, .16);
+  px(r.x, r.y, r.w, 1, tone(r.urg, 1.2));
+  px(r.x, r.y+22, r.w, 2, r.urg);
+  px(r.x+6, r.y+8, 3, 8, r.urg); px(r.x+r.w-9, r.y+8, 3, 8, r.urg);
+}
+
+function drawBackdrop(t){
+  const P = rainyPalette();
+  ctx.drawImage(backdropCity(), 0, 0);
+  for (const b of bgBlinks) {                                 // aircraft warning lights
+    const on = ((t + b.p) % 1900) < 620;
+    if (on) { px(b.x, b.y, 3, 3, "#ff5a5a"); alphaBlock(b.x-2, b.y-2, 7, 7, "#ff5a5a", .30); }
+  }
+  for (const n of bgNeon) {                                   // neon signs, gently pulsing
+    const k = .55 + .45*Math.sin((t + n.p)/900);
+    alphaBlock(n.x, n.y, n.w, 3, n.c, k);
+    alphaBlock(n.x-3, n.y-4, n.w+6, 11, n.c, k*.20);
+  }
+  const fl = lightning(t);
+  if (fl > 0) alphaBlock(0,0,W,H,"#b9cfe6", fl*.20);
+  drawRain(0,0,W,H,t, Math.min(460,(W*H)/2400|0), .16, 720);
+  alphaBlock(0,0,W,H,"#05070f",.08);
+}
+
+/* the tower our offices are in */
+function drawBuilding(t){
+  const B = BLD;
+  alphaBlock(B.x+8, B.y+14, B.w, B.h, "#000000", .45);
+  px(B.x, B.y, B.w, B.h, "#2b313a");                                   // concrete shell
+  px(B.x, B.y, B.w, 4, "#3f4853"); px(B.x, B.y+4, B.w, 1, "#20252c");
+  px(B.x, B.y, 4, B.h, "#39414b"); px(B.x+B.w-4, B.y, 4, B.h, "#1d222a");
+  for (let y=B.y+16; y<B.y+B.h-8; y+=46) {                             // facade seams
+    alphaBlock(B.x+4, y, B.w-8, 1, "#000000", .16);
+    alphaBlock(B.x+4, y+1, B.w-8, 1, "#ffffff", .04);
+  }
+  frameRect(B.x-2, B.y-2, B.w+4, B.h+4, "#11151a");
+
+  px(B.x+16, B.y-11, 46, 11, "#2b313a"); px(B.x+16, B.y-11, 46, 2, "#3f4853");   // roof plant
+  px(B.x+20, B.y-16, 12, 5, "#39414b");
+  px(B.x+B.w-104, B.y-9, 34, 9, "#2b313a"); px(B.x+B.w-104, B.y-9, 34, 2, "#3f4853");
+  const ax = B.x + B.w - 48;
+  px(ax, B.y-34, 3, 34, "#39414b"); px(ax-3, B.y-24, 9, 2, "#39414b");
+  if ((t % 1900) < 620) { px(ax-1, B.y-38, 5, 5, "#ff5a5a"); alphaBlock(ax-4, B.y-41, 11, 11, "#ff5a5a", .30); }
+
+  const top = B.y + B.h - LOUNGE - 12;                                 // ground-floor corridor
+  px(B.x+4, top, B.w-8, 4, "#171a1f");
+  for (let y=top+4, i=0; y < B.y+B.h-4; y+=30, i++) {
+    px(B.x+4, y, B.w-8, Math.min(30, B.y+B.h-4-y), i%2 ? C.floorA : C.floorB);
+    alphaBlock(B.x+4, y, B.w-8, 1, "#000000", .07);
+  }
+  alphaBlock(B.x+4, top+4, B.w-8, 10, "#000000", .22);
+}
+
+function drawBookcase(x,y){
+  alphaBlock(x-2,y+56,58,6,"#000000",.22);
+  px(x, y, 54, 58, C.deskFace); px(x, y, 54, 3, C.deskTop); px(x+2, y+3, 50, 52, tone(C.deskFace,.82));
+  const bc = ["#a85c4a","#4f6f8a","#5f8f6a","#c9a227","#7a5c8c","#b06a4a","#4f8fd9"];
+  for (let sh=0; sh<3; sh++) {
+    const sy = y + 6 + sh*17;
+    for (let i=0;i<8;i++) px(x+4+i*6, sy + ((i*5)%4), 5, 15 - ((i*5)%4), bc[(sh*3+i)%bc.length]);
+    px(x+2, sy+15, 50, 3, C.deskTop);
+  }
+}
+function drawVending(x,y,t){
+  alphaBlock(x-2,y+62,44,6,"#000000",.24);
+  px(x, y, 40, 62, "#2f3b46"); px(x, y, 40, 3, "#48586a");
+  px(x+3, y+4, 25, 44, "#101820"); frameRect(x+3, y+4, 25, 44, "#5f7a8c");
+  const cans = ["#d9534f","#4f8fd9","#e0c14f","#5fae7a"];
+  for (let r2=0;r2<4;r2++) for (let c2=0;c2<3;c2++) px(x+5+c2*8, y+7+r2*11, 6, 8, cans[(r2+c2)%4]);
+  px(x+30, y+8, 7, 12, "#101820"); px(x+31, y+9, 5, 10, ((t/600|0)%2) ? "#7fd08a" : "#2f5a3f");
+  px(x+30, y+26, 7, 3, "#8f979b"); px(x+3, y+52, 34, 8, "#101820");
+}
+function drawLounge(t){
+  const B = BLD, base = B.y + B.h - 10, at = f => Math.round(B.x + 10 + (B.w - 20) * f);
+  drawPlant(B.x+10, base-40, 1); drawPlant(B.x+B.w-40, base-40, 1);
+  drawCouch(at(.14), base-62);
+  drawLowTable(at(.14)+150, base-42);
+  drawCooler(at(.52), base-52);
+  drawPrinter(at(.72), base-54, t);
+  drawSleepingCat(at(.055), base-24, t);
+  if (B.w > 900)  drawBookcase(at(.37), base-62);
+  if (B.w > 1200) drawVending(at(.87), base-66, t);
+}
+
+function drawPlant(x,y,s){
+  const w = 26*s;
+  px(x+3,y+16,w-6,18,C.pot); px(x+2,y+14,w-4,4,C.potHi); px(x+5,y+32,w-10,3,tone(C.pot,.7));
+  px(x+w/2-2,y+4,3,14,C.plantLo);
+  const leaf = [[-9,-2,10,6],[4,-6,11,6],[-4,-11,9,6],[6,3,11,6],[-12,4,10,6],[1,10,10,5]];
+  leaf.forEach(([a,b,c2,d],i)=> px(x+w/2+a, y+8+b, c2, d, i%2?C.plantHi:C.plant));
+  alphaBlock(x,y+34,w,4,"#000000",.20);
+}
+
+function drawCooler(x,y){
+  px(x+2,y+16,26,32,C.cooler); px(x+2,y+16,26,3,"#eef4f5");
+  px(x+6,y+48,18,4,C.metal);
+  px(x+5,y-16,20,30,C.coolerTop); px(x+7,y-14,16,26,"#a8d4e0");
+  alphaBlock(x+9,y-12,5,22,"#ffffff",.35);
+  px(x+11,y+26,8,4,"#4a5a60"); px(x+13,y+30,4,3,"#4a5a60");
+  px(x+7,y+36,16,7,"#e8f2f4");
+  alphaBlock(x,y+48,30,4,"#000000",.20);
+}
+
+function drawSleepingCat(x,y,t){
+  const body="#d8ae72", dark="#b98d55", pale="#f0dcb8";
+  const breathe = Math.sin(t/900) > 0 ? 1 : 0;
+  px(x+6,y+6-breathe,30,14,body);                    // curled body
+  px(x+6,y+4-breathe,30,3,pale);
+  px(x+2,y+8,10,10,body);                            // head
+  px(x+2,y+6,4,4,dark); px(x+9,y+6,4,4,dark);        // ears
+  px(x+4,y+12,2,1,C.ink); px(x+8,y+12,2,1,C.ink);    // closed eyes
+  px(x+6,y+14,2,1,"#a8674f");
+  const flick = ((t/1400|0) % 6 === 0) ? -3 : 0;     // tail flick
+  px(x+34,y+12+flick,12,4,dark); px(x+44,y+9+flick,4,5,dark);
+  alphaBlock(x+2,y+20,44,4,"#000000",.22);
+  const zt = (t/1200) % 4;                           // sleepy z
+  if (zt < 2.2) alphaBlock(x+12,y-4-zt*5,4,4,"#ffffff",.5 - zt*.2);
+}
+
+function drawCouch(x,y){
+  alphaBlock(x-2,y+34,138,7,"#000000",.20);
+  rrect(x, y, 132, 26, 4, C.couchLo);                       // back
+  rrect(x+4, y+3, 124, 20, 3, C.couch);
+  px(x+6, y+4, 120, 3, C.couchHi);
+  rrect(x, y+10, 16, 30, 4, C.couchLo); rrect(x+2, y+12, 12, 26, 3, C.couch);  // arms
+  rrect(x+116, y+10, 16, 30, 4, C.couchLo); rrect(x+118, y+12, 12, 26, 3, C.couch);
+  px(x+16, y+22, 100, 16, C.couchHi);                       // seat
+  px(x+16, y+22, 100, 2, tone(C.couchHi,1.15));
+  px(x+49, y+22, 2, 16, C.couchLo); px(x+82, y+22, 2, 16, C.couchLo);
+  px(x+22, y+8, 20, 14, "#c98a5f"); px(x+23, y+9, 18, 3, "#dda274");   // cushion
+  px(x+92, y+8, 20, 14, "#5f7f8c"); px(x+93, y+9, 18, 3, "#7899a6");
+  px(x+8, y+38, 7, 7, C.deskLeg); px(x+117, y+38, 7, 7, C.deskLeg);
+}
+
+function drawLowTable(x,y){
+  alphaBlock(x-2,y+20,64,6,"#000000",.18);
+  px(x, y, 60, 6, C.deskTop); px(x, y, 60, 2, C.deskHi);
+  px(x, y+6, 60, 2, C.deskLo);
+  px(x+5, y+8, 5, 14, C.deskLeg); px(x+50, y+8, 5, 14, C.deskLeg);
+  px(x+10, y-8, 11, 8, "#4f8fd9"); px(x+10, y-9, 11, 2, "#7bb0e8");   // mug
+  px(x+21, y-6, 3, 4, "#4f8fd9");
+  px(x+32, y-4, 20, 4, C.paper); px(x+34, y-6, 16, 3, "#c9c3b2");     // magazines
+}
+
+function drawPrinter(x,y,t){
+  alphaBlock(x-2,y+32,70,6,"#000000",.20);
+  px(x, y+6, 66, 28, C.print); px(x, y+6, 66, 3, C.printHi);
+  px(x, y+30, 66, 4, C.printLo);
+  px(x+4, y, 58, 8, C.printLo); px(x+6, y+1, 54, 5, C.print);         // paper tray
+  px(x+14, y-6, 34, 7, C.paper); px(x+14, y-6, 34, 2, "#f2eee2");     // sheet feeding in
+  px(x+8, y+14, 50, 10, "#2b3036"); px(x+9, y+15, 48, 8, "#3a4148");  // output slot
+  px(x+12, y+18, 42, 5, C.paper);
+  px(x+56, y+11, 4, 3, ((t/700|0)%2) ? "#7fd08a" : "#39603f");        // status light
+}
+
+/* ---------- an idle agent has nothing better to do ---------- */
+const TCOLS = 9, TROWS = 12;
+const PIECES = [
+  { c:"#4fd6e6", r:["0000111100000000","0010001000100010"] },                                       // I
+  { c:"#e8c84f", r:["0110011000000000"] },                                                          // O
+  { c:"#c77dff", r:["0100111000000000","0100011001000000","0000111001000000","0100110001000000"] }, // T
+  { c:"#5fd08a", r:["0110110000000000","0100011000100000"] },                                       // S
+  { c:"#ff6b6b", r:["1100011000000000","0010011001000000"] },                                       // Z
+  { c:"#5b8dee", r:["1000111000000000","0110010001000000","0000111000100000","0100010011000000"] }, // J
+  { c:"#ffa04f", r:["0010111000000000","0100010001100000","0000111010000000","1100010001000000"] }  // L
+];
+const games = new Map();
+
+function cellsOf(p, rot){
+  const m = p.r[rot % p.r.length], out = [];
+  for (let i=0;i<16;i++) if (m[i] === "1") out.push([i%4, (i/4)|0]);
+  return out;
+}
+function fits(g, cells, ox, oy){
+  for (const [cx,cy] of cells) {
+    const x = ox+cx, y = oy+cy;
+    if (x < 0 || x >= TCOLS || y >= TROWS) return false;
+    if (y >= 0 && g.grid[y][x]) return false;
+  }
+  return true;
+}
+function rnd(g){ g.seed = (Math.imul(g.seed, 1664525) + 1013904223) >>> 0; return g.seed >>> 8; }
+
+function tetris(a){
+  let g = games.get(a.name);
+  if (!g) {
+    g = { grid: Array.from({length:TROWS}, ()=>new Array(TCOLS).fill(0)),
+          cur:null, acc:0, tick:170, seed:(hash(a.name)||7), flash:0, lines:0, next:0 };
+    for (let y=TROWS-3; y<TROWS; y++) {                  // some debris already stacked up
+      let holes = 0;
+      for (let x=0; x<TCOLS; x++) {
+        const on = (rnd(g) % 10) < 7;
+        g.grid[y][x] = on ? 1 + (rnd(g) % PIECES.length) : 0;
+        if (!on) holes++;
+      }
+      if (!holes) g.grid[y][rnd(g) % TCOLS] = 0;          // never start with a full row
+    }
+    games.set(a.name, g);
+  }
+  g.acc += DT;
+  if (g.flash > 0) { g.flash -= DT; g.acc = 0; return g; }
+  let guard = 0;
+  while (g.acc >= g.tick && guard++ < 8) {
+    g.acc -= g.tick;
+    if (!g.cur) {
+      const pi = g.next % PIECES.length;
+      g.next = rnd(g) % PIECES.length;
+      const p = PIECES[pi], rot = rnd(g) % p.r.length;
+      const cells = cellsOf(p, rot);
+      let wide = 0; for (const c of cells) wide = Math.max(wide, c[0]+1);
+      g.cur = { pi, rot, x:3, y:-1, tx: rnd(g) % (TCOLS - wide) };
+      if (!fits(g, cells, 3, 0)) {                       // topped out, sweep the board
+        g.grid = Array.from({length:TROWS}, ()=>new Array(TCOLS).fill(0));
+        g.lines = 0; g.flash = 260;
+      }
+      continue;
+    }
+    const p = PIECES[g.cur.pi], cells = cellsOf(p, g.cur.rot);
+    if (g.cur.x !== g.cur.tx) {                          // shuffle toward the chosen column
+      const dir = g.cur.tx > g.cur.x ? 1 : -1;
+      if (fits(g, cells, g.cur.x + dir, g.cur.y)) g.cur.x += dir; else g.cur.tx = g.cur.x;
+    }
+    if (fits(g, cells, g.cur.x, g.cur.y + 1)) g.cur.y++;
+    else {
+      for (const [cx,cy] of cells) {
+        const y = g.cur.y + cy, x = g.cur.x + cx;
+        if (y >= 0 && y < TROWS) g.grid[y][x] = g.cur.pi + 1;
+      }
+      let cleared = 0;
+      for (let y=TROWS-1; y>=0; y--)
+        if (g.grid[y].every(v=>v)) { g.grid.splice(y,1); g.grid.unshift(new Array(TCOLS).fill(0)); cleared++; y++; }
+      if (cleared) { g.lines += cleared; g.flash = 170; }
+      g.cur = null;
+    }
+  }
+  return g;
+}
+
+function drawTetris(sx,sy,sw,sh,a,col){
+  const g = tetris(a), cell = 4, bw = TCOLS*cell, bh = TROWS*cell;
+  const bx = sx + 4, by = sy + ((sh - bh)/2 | 0);
+  px(sx,sy,sw,sh,"#0a0f16");
+  px(bx-3, by-3, bw+6, bh+6, "#1d2b38");                  // cabinet around the well
+  frameRect(bx-3, by-3, bw+6, bh+6, "#415a70");
+  px(bx, by, bw, bh, "#080d13");
+  for (let x=1;x<TCOLS;x++) alphaBlock(bx+x*cell, by, 1, bh, "#ffffff", .035);
+  for (let y=1;y<TROWS;y++) alphaBlock(bx, by+y*cell, bw, 1, "#ffffff", .035);
+  const cellAt = (x,y,c)=>{ px(bx+x*cell, by+y*cell, cell, cell, tone(c,.62));
+                            px(bx+x*cell, by+y*cell, cell-1, cell-1, c);
+                            px(bx+x*cell, by+y*cell, cell-1, 1, tone(c,1.4)); };
+  for (let y=0;y<TROWS;y++) for (let x=0;x<TCOLS;x++)
+    if (g.grid[y][x]) cellAt(x, y, PIECES[g.grid[y][x]-1].c);
+  if (g.cur) {
+    const p = PIECES[g.cur.pi];
+    for (const [cx,cy] of cellsOf(p, g.cur.rot)) if (g.cur.y + cy >= 0) cellAt(g.cur.x + cx, g.cur.y + cy, p.c);
+  }
+  if (g.flash > 0) alphaBlock(bx, by, bw, bh, "#ffffff", Math.min(.5, g.flash/340));
+  const nx = bx + bw + 8;                                  // next piece + lines cleared
+  px(nx, by, 22, 20, "#101922"); frameRect(nx, by, 22, 20, "#415a70");
+  const np = PIECES[g.next % PIECES.length];
+  for (const [cx2,cy2] of cellsOf(np, 0)) {
+    px(nx+3+cx2*4, by+5+cy2*4, 4, 4, tone(np.c,.62));
+    px(nx+3+cx2*4, by+5+cy2*4, 3, 3, np.c);
+  }
+  px(nx, by+25, 22, 1, "#415a70");
+  for (let i=0; i<Math.min(6, g.lines); i++) px(nx, by+29+i*4, 16, 3, col);
+}
+
+/* ---------- screens ---------- */
+function drawScreen(sx,sy,sw,sh,a,t,col){
+  const st = a.state;
+  if (st === "unknown") {
+    px(sx,sy,sw,sh,"#0c1116"); px(sx+sw/2-8,sy+sh/2,16,2,"#2a3138");
+  } else if (st === "busy") {
+    px(sx,sy,sw,sh,"#0d1520");
+    px(sx,sy,sw,7,"#16202c");                                        // tab bar
+    px(sx+2,sy+1,18,5,"#22303f"); px(sx+22,sy+1,14,5,"#1a2531"); px(sx+38,sy+1,12,5,"#1a2531");
+    px(sx+2,sy+2,18,1,col);
+    px(sx,sy+7,10,sh-7,"#0a1119");                                   // gutter
+    const off = (t/70) % 8;
+    for (let i=0;i<12;i++){
+      const ly = sy + 10 + ((i*8 + 96 - off) % (sh-16));
+      const seed = hash(a.name+i);
+      const ind = 2 + (seed % 4) * 3;
+      const lw = 8 + (seed % 34);
+      px(sx+3, ly, 4, 1, "#2c3a48");                                 // line number
+      px(sx+11+ind, ly, Math.min(lw, sw-14-ind), 2, i%4===0 ? col : (i%3 ? "#4a6a86" : "#7f9fb8"));
+      if (i%5===2) px(sx+13+ind+lw, ly, 6, 2, tone(col,.8));
+    }
+    const cb = (t/380|0)%2;
+    if (cb) px(sx+18, sy+sh-12, 5, 3, "#ffffff");
+    px(sx+2,sy+sh-5,sw-4,3,"#16202c");                               // status bar
+    px(sx+2,sy+sh-5,Math.max(4,((t/26)%(sw-4))|0),3,col);
+  } else if (st === "draft") {
+    px(sx,sy,sw,sh,"#0f1018");
+    for (let i=0;i<5;i++) px(sx+6, sy+8+i*7, 12 + (hash(a.name+"d"+i)%30), 2, "#2e3346");
+    px(sx+6, sy+sh-16, sw-14, 12, "#191a26");                        // prompt box
+    frameRect(sx+6, sy+sh-16, sw-14, 12, col);
+    const w2 = 6 + (hash(a.name)%22);
+    px(sx+9, sy+sh-11, w2, 2, "#cbb6dc");
+    if ((t/450|0)%2) px(sx+11+w2, sy+sh-13, 2, 6, col);              // caret
+  } else if (st === "waiting") {
+    px(sx,sy,sw,sh,"#160f10");
+    const p = (Math.sin(t/260)+1)/2;
+    ctx.globalAlpha = .35 + p*.6; frameRect(sx,sy,sw,sh,col);
+    frameRect(sx+1,sy+1,sw-2,sh-2,col); ctx.globalAlpha = 1;
+    for (let i=0;i<3;i++) px(sx+8, sy+9+i*7, 16 + (hash(a.name+"w"+i)%26), 2, "#4a3338");
+    const bx = sx+sw/2-9, by = sy+sh/2-4;                            // "?" glyph
+    px(bx+2,by-6,12,4,col); px(bx+12,by-4,4,6,col); px(bx+7,by+1,6,4,col);
+    px(bx+7,by+6,5,2,col); px(bx+7,by+10,5,4,col);
+  } else {                                                            // idle: playing tetris
+    drawTetris(sx, sy, sw, sh, a, col);
+  }
+  alphaBlock(sx,sy,sw,2,"#ffffff",.06);
+  ctx.globalAlpha = .05; ctx.fillStyle = "#ffffff";                   // glass reflection
+  ctx.beginPath(); ctx.moveTo(sx,sy+sh); ctx.lineTo(sx+sw*.42,sy);
+  ctx.lineTo(sx+sw*.62,sy); ctx.lineTo(sx+sw*.2,sy+sh); ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+/* ---------- one workstation, nobody ever leaves it ---------- */
+function drawStation(dx,dy,a,t){
+  const seed  = hash(a.name);
+  const skin  = SKIN[seed % SKIN.length];
+  const hair  = HAIR[(seed>>>3) % HAIR.length];
+  const shirt = SHIRT[(seed>>>6) % SHIRT.length];
+  const mug   = MUG[(seed>>>9) % MUG.length];
+  const style = (seed>>>12) % 3;                    // hair style
+  const cans  = ((seed>>>15) % 10) < 5;             // headphones
+  const potted= ((seed>>>18) % 10) < 4;             // desk plant
+  const col   = stateColor(a.state);
+  const st    = a.state;
+  const busy  = st === "busy";
+  const idle  = st === "idle";
+  const gone  = st === "unknown";
+  const cx    = dx + DW/2;
+
+  if (gone) ctx.globalAlpha = .55;
+
+  /* --- pool of status light on the floor --- */
+  const pool = ctx.createRadialGradient(cx, dy+96, 6, cx, dy+96, 92);
+  pool.addColorStop(0, col + "3a"); pool.addColorStop(.55, col + "18"); pool.addColorStop(1, col + "00");
+  ctx.fillStyle = pool; ctx.fillRect(dx-30, dy+40, DW+60, 112);
+
+  /* --- desk --- */
+  alphaBlock(dx+4, dy+52, DW-8, 8, "#000000", .18);
+  px(dx, dy, DW, 10, C.deskTop); px(dx, dy, DW, 3, C.deskHi);
+  px(dx, dy+10, DW, 4, tone(col,.55));                        // state band on the desk edge
+  px(dx, dy+10, DW, 3, col); px(dx, dy+10, DW, 1, tone(col,1.35));
+  alphaBlock(dx-6, dy+9, DW+12, 6, col, .18);
+  px(dx, dy+13, DW, 16, C.deskFace); px(dx, dy+27, DW, 2, C.deskLo);
+  frameRect(dx+8, dy+16, 42, 10, C.deskLo); alphaBlock(dx+9, dy+17, 40, 8, "#ffffff", .05);
+  px(dx+22, dy+20, 14, 2, C.metal);
+  frameRect(dx+DW-50, dy+16, 42, 10, C.deskLo); alphaBlock(dx+DW-49, dy+17, 40, 8, "#ffffff", .05);
+  px(dx+DW-36, dy+20, 14, 2, C.metal);
+  px(dx+9, dy+29, 9, 28, C.deskLeg); px(dx+DW-18, dy+29, 9, 28, C.deskLeg);
+  px(dx+9, dy+29, 3, 28, tone(C.deskLeg,1.2)); px(dx+DW-18, dy+29, 3, 28, tone(C.deskLeg,1.2));
+
+  /* --- monitor --- */
+  px(dx+56, dy-9, 38, 7, C.bezelHi); px(dx+56, dy-9, 38, 2, C.metal);
+  px(dx+69, dy-24, 12, 16, C.bezel); px(dx+69, dy-24, 3, 16, C.bezelHi);
+  rrect(dx+33, dy-88, 84, 64, 3, C.bezel);
+  px(dx+34, dy-87, 82, 2, C.bezelHi);
+  frameRect(dx+37, dy-84, 76, 56, C.bezelLo);
+  const sx = dx+38, sy = dy-83, sw = 74, sh = 54;
+  drawScreen(sx, sy, sw, sh, a, t, col);
+  px(dx+72, dy-28, 6, 3, tone(col,.45));                      // power LED
+  const ledOn = busy ? ((t/300|0)%2 ? 1 : .75) : (st === "waiting" ? (Math.sin(t/240)+1)/2*.8+.2 : .55);
+  alphaBlock(dx+73, dy-27, 4, 2, col, ledOn);
+  alphaBlock(dx+70, dy-29, 10, 5, col, ledOn*.22);
+
+  /* --- desk clutter --- */
+  px(dx+42, dy-9, 62, 9, C.keys); px(dx+42, dy-9, 62, 2, C.keyTop);
+  for (let ky=0; ky<2; ky++) for (let kx=0; kx<14; kx++)
+    px(dx+45+kx*4, dy-6+ky*3, 3, 2, (busy && ((t/90|0)+kx+ky)%11===0) ? col : C.keyTop);
+  px(dx+110, dy-8, 11, 8, C.keyTop); px(dx+112, dy-7, 3, 3, C.keys);   // mouse
+  px(dx+17, dy-16, 14, 16, mug);                                       // mug
+  px(dx+17, dy-16, 4, 16, tone(mug,1.2)); px(dx+27, dy-16, 4, 16, tone(mug,.8));
+  px(dx+16, dy-18, 16, 3, tone(mug,1.3));
+  px(dx+18, dy-17, 12, 2, "#4a3226"); px(dx+19, dy-17, 10, 1, "#6b4a35");
+  px(dx+31, dy-13, 5, 3, tone(mug,.85)); px(dx+34, dy-12, 3, 5, tone(mug,.85));
+  px(dx+31, dy-8, 5, 3, tone(mug,.85));
+  px(dx+15, dy-1, 18, 2, "#000000"); alphaBlock(dx+15, dy-1, 18, 2, "#000000", .18);
+  if (busy) { const s2 = (t/500)%2;                                    // steam
+    alphaBlock(dx+20, dy-24-s2*4, 3, 5, "#ffffff", .30 - s2*.12);
+    alphaBlock(dx+26, dy-27-s2*4, 3, 5, "#ffffff", .22 - s2*.09); }
+  px(dx+120, dy-6, 26, 6, "#4f6f8a");                                  // books
+  px(dx+120, dy-4, 26, 3, C.paper); px(dx+120, dy-6, 26, 1, "#6d8ea8");
+  px(dx+123, dy-11, 21, 5, "#a85c4a");
+  px(dx+123, dy-9, 21, 2, "#e0dac9"); px(dx+123, dy-11, 21, 1, "#c2745f");
+  px(dx+125, dy-14, 15, 2, "#e8d267"); px(dx+139, dy-14, 3, 2, "#3a3a3a");
+  if (potted) { px(dx+2, dy-14, 12, 14, C.pot); px(dx+2, dy-16, 12, 3, C.potHi);
+    px(dx+4, dy-22, 4, 8, C.plantLo); px(dx, dy-26, 7, 5, C.plant); px(dx+7, dy-24, 7, 5, C.plantHi); }
+
+  /* --- the person, seen from behind, always in the chair --- */
+  const lean   = idle ? 4 : (st === "draft" ? -2 : 0);
+  const typing = busy && ((t/120|0) % 2);
+  const hy = dy + 3 + lean, hx = cx - 13;
+  const shy = hy + 30;
+
+  px(cx-6, hy+26, 12, 8, tone(skin,.86));                     // neck
+  px(cx-7, hy+26, 1, 8, tone(skin,.6)); px(cx+6, hy+26, 1, 8, tone(skin,.6));
+  const sEdge = tone(shirt,.55), sHi = tone(shirt,1.18), sLo = tone(shirt,.82);
+  px(dx+51, shy+1, 48, 4, sEdge); px(dx+47, shy+4, 56, 4, sEdge);   // sloped shoulders
+  px(dx+43, shy+7, 64, 29, sEdge);
+  px(dx+52, shy+2, 46, 3, shirt); px(dx+48, shy+5, 54, 3, shirt);
+  px(dx+44, shy+8, 62, 27, shirt);
+  px(dx+52, shy+2, 46, 2, sHi); px(dx+48, shy+5, 9, 2, sHi); px(dx+93, shy+5, 9, 2, sHi);
+  px(dx+44, shy+8, 6, 27, sLo); px(dx+100, shy+8, 6, 27, sLo);
+  px(cx-10, shy, 20, 5, sHi); px(cx-8, shy+1, 16, 3, tone(shirt,1.32));   // collar
+  const al = typing ? 2 : 0, ar = typing ? 0 : 2;             // arms angling in to the keys
+  const armY = idle ? shy+16 : shy+9;
+  [[dx+38, al, 1], [dx+104, ar, -1]].forEach(([axx, bob, dir])=>{
+    px(axx, armY+bob, 8, 16, tone(shirt,.92));                // upper arm
+    px(axx, armY+bob, 8, 3, tone(shirt,1.1));
+    if (idle) { px(axx+1, armY+16, 6, 9, skin); }             // hands in the lap
+    else { px(axx+dir*2, armY+13+bob, 8, 9, tone(shirt,.86)); // forearm, angled inward
+           px(axx+dir*4, armY+20+bob, 7, 7, skin); }          // hand at the desk edge
+  });
+
+  if (st === "waiting") {                                     // turned around, hand up
+    rrect(hx, hy+2, 26, 27, 3, tone(skin,.55));               // silhouette edge
+    rrect(hx+1, hy+3, 24, 25, 3, skin);                       // face
+    rrect(hx, hy, 26, 10, 3, hair); px(hx, hy+6, 4, 12, hair); px(hx+22, hy+6, 4, 12, hair);
+    px(hx+3, hy, 20, 2, tone(hair,1.3));
+    px(hx+4, hy+8, 8, 2, tone(hair,.85));
+    px(hx+6, hy+13, 4, 4, C.ink); px(hx+16, hy+13, 4, 4, C.ink);
+    px(hx+6, hy+10, 4, 2, tone(hair,.9)); px(hx+16, hy+10, 4, 2, tone(hair,.9));
+    px(hx+10, hy+21, 7, 2, tone(skin,.72));
+    px(hx-3, hy+13, 4, 8, skin); px(hx+25, hy+13, 4, 8, skin);
+    const wv = (t/300|0)%2 ? 0 : 2;                           // small wave
+    px(dx+104, shy+2, 9, 12, tone(shirt,.92));                // upper arm, out to the side
+    px(dx+109-wv, shy-10, 8, 14, tone(shirt,.86));            // forearm up
+    px(dx+108-wv, shy-20, 10, 11, skin);                      // hand
+    px(dx+108-wv, shy-22, 3, 4, skin); px(dx+112-wv, shy-23, 3, 5, skin);
+    px(dx+115-wv, shy-22, 3, 4, skin);
+  } else {
+    rrect(hx-1, hy+1, 28, 28, 4, tone(hair,.6));              // silhouette edge
+    rrect(hx, hy+2, 26, 26, 3, hair);                         // back of the head
+    px(hx+3, hy+1, 20, 3, tone(hair,1.3));
+    px(hx+4, hy+4, 16, 3, tone(hair,1.15));
+    px(hx+16, hy+4, 5, 6, tone(hair,1.24));                   // crown whorl
+    px(hx+4, hy+24, 18, 3, tone(hair,.78));                   // nape
+    if (style === 1) { px(hx+8, hy-8, 11, 10, hair); px(hx+9, hy-8, 9, 2, tone(hair,1.3)); }
+    if (style === 2) { px(hx-3, hy+8, 32, 26, hair); px(hx-3, hy+8, 3, 26, tone(hair,.85)); }
+    px(hx-3, hy+13, 4, 8, skin); px(hx+25, hy+13, 4, 8, skin);   // ears
+    px(hx+7, hy+22, 12, 4, tone(hair,.82));
+  }
+  if (cans) {
+    px(hx-5, hy+8, 6, 14, C.chairLo); px(hx+25, hy+8, 6, 14, C.chairLo);
+    px(hx-4, hy-2, 34, 4, C.chairHi); px(hx-5, hy+2, 3, 8, C.chairHi); px(hx+28, hy+2, 3, 8, C.chairHi);
+    px(hx-4, hy+11, 3, 4, busy ? col : C.chairLo);
+  }
+
+  /* --- chair, drawn over the torso the way a chair back sits between you and them --- */
+  const cyTop = shy + 22 + (idle ? 3 : 0);
+  rrect(dx+48, cyTop, 54, 28, 4, C.chair);
+  rrect(dx+51, cyTop+3, 48, 22, 3, C.chairHi);
+  px(dx+51, cyTop+3, 48, 3, tone(C.chairHi,1.2));
+  px(dx+56, cyTop-4, 38, 4, C.chair);                         // head rest lip
+  px(dx+58, cyTop-3, 34, 2, col);                             // status accent
+  px(dx+40, cyTop+9, 10, 6, C.chairLo); px(dx+100, cyTop+9, 10, 6, C.chairLo);
+  px(dx+69, cyTop+28, 12, 14, C.chairLo);
+  px(cx-27, cyTop+42, 54, 5, C.chair); px(cx-4, cyTop+40, 8, 8, C.chair);
+  [-27, -2, 22].forEach(o=> px(cx+o, cyTop+46, 6, 5, C.wheel));
+  alphaBlock(cx-32, cyTop+51, 64, 5, "#000000", .22);
+
+  /* --- idle: a slow "z" drifting up, nobody wandering the room --- */
+  if (idle) {
+    const zp = (t/1500) % 3;
+    if (zp < 2.2) {
+      const zy = dy + 58 - zp*15, za = .6 - zp*.24, zs = 5, zx = cx - 48;
+      ctx.globalAlpha = Math.max(0, za); ctx.fillStyle = C.idle;
+      ctx.fillRect(zx, zy, zs*2, 2); ctx.fillRect(zx, zy+zs*2-2, zs*2, 2);
+      for (let i=0;i<zs;i++) ctx.fillRect(zx+(zs*2-2-i*2), zy+2+i*((zs*2-4)/zs), 2, 2);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  /* --- waiting: the '!' nobody can miss --- */
+  if (st === "waiting") {
+    const p = Math.sin(t/240) * 3;
+    const bxx = cx - 62, byy = dy - 78 + p;
+    rrect(bxx, byy, 18, 24, 3, C.wait);
+    px(bxx+6, byy+22, 6, 5, C.wait);
+    px(bxx+7, byy+5, 4, 10, "#ffffff"); px(bxx+7, byy+17, 4, 3, "#ffffff");
+  }
+
+  /* --- monitor glow spilling onto the desk --- */
+  if (busy || st === "draft" || st === "waiting") {
+    const g = ctx.createRadialGradient(cx, dy-56, 4, cx, dy-56, 96);
+    g.addColorStop(0, col + "26"); g.addColorStop(1, col + "00");
+    ctx.fillStyle = g; ctx.fillRect(dx-24, dy-104, DW+48, 150);
+  }
+  if (gone) ctx.globalAlpha = 1;
+}
+
+/* ---------- frame ---------- */
+function draw(t){
+  DT = Math.min(80, t - lastT || 16); lastT = t;
+  const scale = resize();
+  ctx.clearRect(0,0,W,H);
+  drawBackdrop(t);
+  drawBuilding(t);
+  drawLounge(t);
+
+  const hits = [];
+  for (const r of rooms) {
+    drawRoom(r, t);
+    for (const seat of r.seats)
+      hits.push({ a: seat.s, x: seat.x + DW/2, y: seat.y - 30,
+                  label: { x: seat.x + DW/2, y: seat.y + 112 } });
+  }
+
+  // vignette
+  const v = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*.42, W/2, H/2, Math.max(W,H)*.72);
+  v.addColorStop(0, "rgba(0,0,0,0)"); v.addColorStop(1, "rgba(0,0,0,.35)");
+  ctx.fillStyle = v; ctx.fillRect(0,0,W,H);
+
+  layout(hits, scale);
+  requestAnimationFrame(draw);
+}
+
+/* ---------- html overlay ---------- */
+let plateCache = "";
+function layout(hits, scale){
+  const key = hits.map(h=>h.a.name+h.a.state+h.a.quiet_str+h.a.draft+(h.label.x|0)+(h.label.y|0)).join("|")
+            + "@" + H + "/" + rooms.map(r=>r.key+r.members.length+r.urg).join(",");
+  if (key === plateCache) return;
+  plateCache = key;
+  overlay.innerHTML = "";
+  for (const r of rooms) {                                  // one sign per tmux session
+    const sg = document.createElement("div");
+    sg.className = "roomtag";
+    sg.style.left = ((r.x + r.w/2)/W*100) + "%";
+    sg.style.top  = ((r.y + 11)/H*100) + "%";
+    sg.innerHTML = '<span class="rn" style="color:'+r.urg+'">'+esc(r.key)+'</span>'
+                 + '<span class="rc">'+r.members.length+(r.members.length>1?" agents":" agent")+'</span>';
+    overlay.appendChild(sg);
+  }
+  for (const h of hits) {
+    const a = h.a, col = stateColor(a.state);
+    const p = document.createElement("div");
+    p.className = "plate"; p.dataset.name = a.name;
+    p.style.left = (h.label.x/W*100) + "%";
+    p.style.top  = (h.label.y/H*100) + "%";
+    const spot = (a.where && a.where !== "-") ? (a.where.split(":")[1] || a.where) : a.name;
+    p.innerHTML = '<div class="nm" style="color:'+col+'">'+esc(a.state)+'</div>'
+                + '<div class="sub">'+esc(spot)+' &middot; '+esc(a.quiet_str)+'</div>';
+    p.addEventListener("click", ()=>focusPane(a));
+    p.addEventListener("mouseenter", e=>showTip(e,a));
+    p.addEventListener("mousemove", e=>moveTip(e));
+    p.addEventListener("mouseleave", hideTip);
+    overlay.appendChild(p);
+  }
+}
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function showTip(e,a){
+  tip.innerHTML =
+      '<div><b style="color:'+stateColor(a.state)+'">'+esc(a.name)+'</b></div>'
+    + '<div><span class="k">state </span>'+esc(a.state)+'  <span class="k">tmux </span>'+esc(a.where)+'</div>'
+    + '<div><span class="k">cwd   </span>'+esc(a.cwd)+'</div>'
+    + '<div><span class="k">up '+esc(a.age)+' &middot; quiet '+esc(a.quiet_str)+'</span></div>'
+    + (a.draft ? '<span class="snip" style="color:'+C.draft+'">unsent: '+esc(a.draft)+'</span>'
+               : (a.snip ? '<span class="snip">'+esc(a.snip)+'</span>' : ''));
+  tip.style.display = "block"; moveTip(e);
+}
+function moveTip(e){
+  const pad = 14;
+  let x = e.clientX + pad, y = e.clientY + pad;
+  const r = tip.getBoundingClientRect();
+  if (x + r.width  > innerWidth  - 8) x = e.clientX - r.width  - pad;
+  if (y + r.height > innerHeight - 8) y = e.clientY - r.height - pad;
+  tip.style.left = x+"px"; tip.style.top = y+"px";
+}
+function hideTip(){ tip.style.display = "none"; }
+
+let toastT = 0;
+function toast(msg){
+  const el = document.getElementById("toast");
+  el.textContent = msg; el.classList.add("on");
+  clearTimeout(toastT); toastT = setTimeout(()=>el.classList.remove("on"), 2200);
+}
+
+async function focusPane(a){
+  const sess = (a.where||"").split(":")[0];
+  if (!a.pane) { toast(a.name + " isn't in tmux"); return; }
+  try {
+    const r = await fetch("/api/focus", {method:"POST", headers:{"Content-Type":"application/json"},
+                                         body: JSON.stringify({pane:a.pane})});
+    const j = await r.json();
+    if (!r.ok) { toast("could not focus: " + (j.error||r.status)); return; }
+    const cmd = "tmux attach -t " + sess;
+    try { await navigator.clipboard.writeText(cmd); toast(a.where + " focused · copied “" + cmd + "”"); }
+    catch { toast(a.where + " focused"); }
+  } catch (e) { toast("server unreachable"); }
+}
+
+/* ---------- polling ---------- */
+const beat = document.getElementById("beat");
+async function poll(){
+  try {
+    const r = await fetch("/api/sessions", {cache:"no-store"});
+    const j = await r.json();
+    sessions = j.sessions || [];
+    buildRooms(sessions);
+    document.getElementById("empty").style.display = sessions.length ? "none" : "flex";
+    frame.style.display = sessions.length ? "block" : "none";
+    counts();
+    beat.classList.add("on"); setTimeout(()=>beat.classList.remove("on"), 180);
+  } catch (e) { /* server gone; keep last frame */ }
+}
+function counts(){
+  const n = {}; for (const s of sessions) n[s.state] = (n[s.state]||0)+1;
+  const need = (n.waiting||0)+(n.draft||0)+(n.idle||0);
+  const row = [["busy",C.busy],["idle",C.idle],["draft",C.draft],["waiting",C.wait]]
+    .filter(([k])=>n[k])
+    .map(([k,c])=>'<span class="cnt"><i class="swatch" style="background:'+c+'"></i><b>'+n[k]+'</b> '+k+'</span>')
+    .join("");
+  document.getElementById("counts").innerHTML =
+    row + '<span class="cnt"><b>'+need+'</b> need you</span>';
+}
+
+function toggleFull(){
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen().catch(()=>{});
+}
+document.getElementById("fs").addEventListener("click", toggleFull);
+addEventListener("keydown", e=>{ if (e.key === "f" && !e.metaKey && !e.ctrlKey) toggleFull(); });
+addEventListener("resize", ()=>{ plateCache=""; buildRooms(sessions); });
+addEventListener("fullscreenchange", ()=>{ plateCache=""; setTimeout(()=>buildRooms(sessions), 60); });
+poll(); setInterval(poll, 2000);
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
