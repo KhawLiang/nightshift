@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>cc-office 处理逻辑</title>
+<style>
+  :root{
+    --bg:#faf9f6; --panel:#ffffff; --ink:#191713; --dim:#5d574d;
+    --line:rgba(25,23,19,.14); --soft:rgba(25,23,19,.045);
+    --accent:#b4531a;
+    --busy:#a86a08; --idle:#1c7d55; --wait:#c62b38; --draft:#7a3fb0; --unk:#6b7280;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#14120f; --panel:#1c1916; --ink:#f1eee6; --dim:rgba(241,238,230,.62);
+      --line:rgba(241,238,230,.16); --soft:rgba(241,238,230,.05);
+      --accent:#ff9d5c;
+      --busy:#ffb020; --idle:#3ddc97; --wait:#ff4757; --draft:#c77dff; --unk:#8b95a1;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#14120f; --panel:#1c1916; --ink:#f1eee6; --dim:rgba(241,238,230,.62);
+    --line:rgba(241,238,230,.16); --soft:rgba(241,238,230,.05);
+    --accent:#ff9d5c;
+    --busy:#ffb020; --idle:#3ddc97; --wait:#ff4757; --draft:#c77dff; --unk:#8b95a1;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.75 system-ui,-apple-system,"PingFang SC","Hiragino Sans GB",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:860px; margin:0 auto; padding:64px 24px 120px}
+  header{border-bottom:1px solid var(--line); padding-bottom:28px; margin-bottom:8px}
+  h1{font-size:30px; line-height:1.25; margin:0 0 10px; letter-spacing:-.01em}
+  .lede{color:var(--dim); margin:0; font-size:16px}
+  h2{font-size:20px; margin:56px 0 14px; letter-spacing:-.005em}
+  h3{font-size:15px; margin:32px 0 8px; color:var(--dim); font-weight:600;
+     text-transform:uppercase; letter-spacing:.06em}
+  p{margin:0 0 14px}
+  code{font-family:var(--mono); font-size:.88em; background:var(--soft);
+       padding:.1em .35em; border-radius:4px}
+  ul,ol{margin:0 0 14px; padding-left:22px}
+  li{margin:0 0 7px}
+  figure{margin:26px 0 30px; padding:20px 18px 14px; background:var(--panel);
+         border:1px solid var(--line); border-radius:10px; overflow-x:auto}
+  figure svg{display:block; width:100%; max-width:100%; height:auto; color:var(--ink)}
+  figcaption{margin-top:14px; padding-top:12px; border-top:1px solid var(--line);
+             color:var(--dim); font-size:13.5px; line-height:1.6}
+  .note{border-left:3px solid var(--accent); padding:2px 0 2px 16px; margin:22px 0;
+        color:var(--dim); font-size:15px}
+  .note b{color:var(--ink)}
+  table{border-collapse:collapse; width:100%; margin:18px 0; font-size:14.5px}
+  th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top}
+  th{color:var(--dim); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:.05em}
+  td:first-child{font-family:var(--mono); font-size:13px; white-space:nowrap}
+  .sw{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:7px; vertical-align:1px}
+  .foot{margin-top:72px; padding-top:20px; border-top:1px solid var(--line);
+        color:var(--dim); font-size:13.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>cc-office 背后的处理逻辑</h1>
+  <p class="lede">这台 Mac 上每个 Claude Code session 是怎么被发现、判断状态、然后画成一间办公室的。</p>
+</header>
+
+<h2>一句话</h2>
+<p>Claude Code 自己会把每个 session 的状态写成 JSON 落盘，cc-office 只是<strong>读这份现成的注册表</strong>，补一次 tmux 面板快照来判断“有没有打了字没发”，然后把结果扔给浏览器画成像素画。没有 agent、没有数据库、没有轮询 API。</p>
+
+<h2>数据从哪来</h2>
+<p>三个来源，全部是本机文件或本机命令：</p>
+<table>
+  <tr><th>来源</th><th>提供什么</th></tr>
+  <tr><td>~/.claude/sessions/&lt;pid&gt;.json</td><td>pid、sessionId、cwd、tmux 面板引用、status、时间戳。<strong>Claude Code 自己写的</strong>，不是我们生成的</td></tr>
+  <tr><td>tmux capture-pane</td><td>提示符后面已经打了但没按回车的文字</td></tr>
+  <tr><td>~/.claude/projects/*/&lt;sid&gt;.jsonl</td><td>最后一条消息，用作悬停提示里的摘要</td></tr>
+</table>
+<p>最不好猜的就是第一条。整个项目能这么小，是因为状态不需要推断，Claude Code 已经写好了。</p>
+
+<figure>
+<svg viewBox="0 0 960 430" role="img" aria-label="数据从三个本机来源经 collect() 汇总，通过 loopback HTTP 送到浏览器，浏览器每 2 秒拉一次并每帧重绘，点击名牌再把 tmux 面板 id 送回服务端聚焦">
+  <defs>
+    <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+    </marker>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--accent)"/>
+    </marker>
+  </defs>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="12.5">
+
+  <!-- sources -->
+  <text x="14" y="24" font-size="11.5" fill="currentColor" opacity=".55" letter-spacing="1">本机真实状态</text>
+  <g fill="none" stroke="currentColor" stroke-opacity=".45">
+    <rect x="14" y="38" width="212" height="60" rx="6"/>
+    <rect x="14" y="118" width="212" height="60" rx="6"/>
+    <rect x="14" y="198" width="212" height="60" rx="6"/>
+  </g>
+  <text x="28" y="62" fill="currentColor">sessions/&lt;pid&gt;.json</text>
+  <text x="28" y="82" fill="currentColor" opacity=".6" font-size="11.5">status · tmux · cwd · pid</text>
+  <text x="28" y="142" fill="currentColor">tmux capture-pane</text>
+  <text x="28" y="162" fill="currentColor" opacity=".6" font-size="11.5">未提交的输入</text>
+  <text x="28" y="222" fill="currentColor">&lt;sid&gt;.jsonl</text>
+  <text x="28" y="242" fill="currentColor" opacity=".6" font-size="11.5">最后一条消息</text>
+
+  <!-- fan in -->
+  <g stroke="currentColor" stroke-opacity=".55" fill="none" marker-end="url(#a1)">
+    <path d="M226 68 C258 68 258 128 288 128"/>
+    <path d="M226 148 L288 148"/>
+    <path d="M226 228 C258 228 258 168 288 168"/>
+  </g>
+
+  <!-- collect -->
+  <rect x="292" y="104" width="152" height="88" rx="6" fill="none" stroke="currentColor" stroke-opacity=".75"/>
+  <text x="368" y="134" text-anchor="middle" fill="currentColor">collect()</text>
+  <text x="368" y="152" text-anchor="middle" fill="currentColor" opacity=".6" font-size="11.5">core.py</text>
+  <text x="368" y="172" text-anchor="middle" fill="currentColor" opacity=".6" font-size="11.5">→ rows[]</text>
+
+  <line x1="444" y1="148" x2="508" y2="148" stroke="currentColor" stroke-opacity=".55" marker-end="url(#a1)"/>
+
+  <!-- server -->
+  <rect x="512" y="112" width="168" height="72" rx="6" fill="none" stroke="currentColor" stroke-opacity=".75"/>
+  <text x="596" y="140" text-anchor="middle" fill="currentColor">http.server</text>
+  <text x="596" y="160" text-anchor="middle" fill="currentColor" opacity=".6" font-size="11.5">127.0.0.1:8787</text>
+
+  <line x1="680" y1="148" x2="742" y2="148" stroke="currentColor" stroke-opacity=".55" marker-end="url(#a1)"/>
+  <text x="711" y="138" text-anchor="middle" fill="currentColor" opacity=".6" font-size="11">JSON</text>
+
+  <!-- browser -->
+  <rect x="746" y="30" width="200" height="256" rx="8" fill="none" stroke="currentColor"
+        stroke-opacity=".35" stroke-dasharray="4 4"/>
+  <text x="760" y="24" font-size="11.5" fill="currentColor" opacity=".55" letter-spacing="1">浏览器</text>
+  <g fill="none" stroke="currentColor" stroke-opacity=".6">
+    <rect x="762" y="46" width="168" height="52" rx="6"/>
+    <rect x="762" y="122" width="168" height="52" rx="6"/>
+    <rect x="762" y="198" width="168" height="72" rx="6"/>
+  </g>
+  <text x="846" y="68" text-anchor="middle" fill="currentColor">poll()</text>
+  <text x="846" y="86" text-anchor="middle" fill="currentColor" opacity=".6" font-size="11.5">每 2 秒</text>
+  <text x="846" y="144" text-anchor="middle" fill="currentColor">buildRooms()</text>
+  <text x="846" y="162" text-anchor="middle" fill="currentColor" opacity=".6" font-size="11.5">→ rooms[]</text>
+  <text x="846" y="224" text-anchor="middle" fill="currentColor">draw() + layout()</text>
+  <text x="846" y="242" text-anchor="middle" fill="currentColor" opacity=".6" font-size="11.5">canvas 每帧</text>
+  <text x="846" y="260" text-anchor="middle" fill="currentColor" opacity=".6" font-size="11.5">名牌是 DOM</text>
+  <g stroke="currentColor" stroke-opacity=".55" fill="none" marker-end="url(#a1)">
+    <line x1="846" y1="98" x2="846" y2="118"/>
+    <line x1="846" y1="174" x2="846" y2="194"/>
+  </g>
+
+  <!-- click back -->
+  <path d="M846 270 L846 340 L596 340 L596 188" fill="none" stroke="var(--accent)"
+        stroke-width="1.6" marker-end="url(#a2)"/>
+  <text x="722" y="332" text-anchor="middle" fill="var(--accent)" font-size="11.5">点桌子 → POST /api/focus {pane}</text>
+  <path d="M596 96 L596 60 L440 60" fill="none" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#a2)"/>
+  <text x="518" y="52" text-anchor="middle" fill="var(--accent)" font-size="11.5">tmux select-window / select-pane</text>
+  <line x1="596" y1="112" x2="596" y2="96" stroke="var(--accent)" stroke-width="1.6"/>
+
+  <!-- host boundary -->
+  <text x="14" y="404" font-size="11.5" fill="currentColor" opacity=".45">左边全部是本机文件与本机命令，服务端只绑 loopback，没有任何数据离开这台机器。</text>
+  </g>
+</svg>
+<figcaption>读的方向是左到右：三个来源汇进 <code>collect()</code>，一次 HTTP 送到浏览器，浏览器每 2 秒拉一次、每帧重绘。橙色是唯一的回程：点一张名牌，把 tmux 面板 id 送回服务端，服务端替你切窗口。</figcaption>
+</figure>
+
+<h2>状态是怎么算出来的</h2>
+<p>五个状态里只有四个是读来的，<code>draft</code> 是算出来的。判断“打了字没发”要花一次 <code>capture-pane</code> 子进程，所以只对已经停下来的 session 做——正在跑的 session 不可能在等你按回车。</p>
+
+<figure>
+<svg viewBox="0 0 700 480" role="img" aria-label="每个 session JSON 先过进程存活检查，再读 status 字段；只有 idle 和 unknown 会去抓 tmux 面板判断是否有未提交文字并升级为 draft，busy 和 waiting 绕过这一步，最后按紧急度排序">
+  <defs>
+    <marker id="b1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="12.5" fill="currentColor">
+
+  <rect x="270" y="14" width="200" height="44" rx="6" fill="none" stroke="currentColor" stroke-opacity=".6"/>
+  <text x="370" y="41" text-anchor="middle">sessions/*.json</text>
+
+  <line x1="370" y1="58" x2="370" y2="82" stroke="currentColor" stroke-opacity=".55" marker-end="url(#b1)"/>
+
+  <rect x="270" y="84" width="200" height="44" rx="6" fill="none" stroke="currentColor" stroke-opacity=".6"/>
+  <text x="370" y="111" text-anchor="middle">alive(pid) ?</text>
+
+  <line x1="470" y1="106" x2="566" y2="106" stroke="currentColor" stroke-opacity=".55" marker-end="url(#b1)"/>
+  <text x="516" y="98" text-anchor="middle" font-size="11" opacity=".6">no</text>
+  <rect x="570" y="86" width="96" height="40" rx="6" fill="none" stroke="currentColor" stroke-opacity=".35"/>
+  <text x="618" y="111" text-anchor="middle" opacity=".55">丢掉</text>
+
+  <line x1="370" y1="128" x2="370" y2="152" stroke="currentColor" stroke-opacity=".55" marker-end="url(#b1)"/>
+  <text x="384" y="146" font-size="11" opacity=".6">yes</text>
+
+  <rect x="248" y="154" width="244" height="52" rx="6" fill="none" stroke="currentColor" stroke-opacity=".6"/>
+  <text x="370" y="176" text-anchor="middle">读 status 字段</text>
+  <text x="370" y="195" text-anchor="middle" font-size="11.5" opacity=".6">busy · idle · waiting · unknown</text>
+
+  <line x1="370" y1="206" x2="370" y2="238" stroke="currentColor" stroke-opacity=".55" marker-end="url(#b1)"/>
+  <text x="384" y="228" font-size="11" opacity=".6">idle / unknown</text>
+
+  <rect x="248" y="240" width="244" height="56" rx="6" fill="none" stroke="var(--accent)" stroke-opacity=".9"/>
+  <text x="370" y="264" text-anchor="middle" fill="var(--accent)">pane_draft(pane)</text>
+  <text x="370" y="283" text-anchor="middle" font-size="11.5" fill="var(--accent)" opacity=".8">capture-pane，取提示符后的文字</text>
+  <text x="504" y="264" font-size="11" opacity=".55">一次子进程调用</text>
+  <text x="504" y="281" font-size="11" opacity=".55">只在这条分支上花</text>
+
+  <line x1="370" y1="296" x2="370" y2="328" stroke="currentColor" stroke-opacity=".55" marker-end="url(#b1)"/>
+
+  <rect x="248" y="330" width="244" height="44" rx="6" fill="none" stroke="currentColor" stroke-opacity=".6"/>
+  <text x="370" y="357" text-anchor="middle">有文字 → state = draft</text>
+
+  <line x1="370" y1="374" x2="370" y2="404" stroke="currentColor" stroke-opacity=".55" marker-end="url(#b1)"/>
+
+  <rect x="180" y="406" width="380" height="52" rx="6" fill="none" stroke="currentColor" stroke-opacity=".6"/>
+  <text x="370" y="428" text-anchor="middle">按 RANK 排序</text>
+  <text x="370" y="447" text-anchor="middle" font-size="11.5" opacity=".6">waiting ‹ draft ‹ idle ‹ busy ‹ unknown</text>
+
+  <!-- bypass -->
+  <path d="M248 180 L120 180 L120 432 L176 432" fill="none" stroke="currentColor"
+        stroke-opacity=".45" stroke-dasharray="5 4" marker-end="url(#b1)"/>
+  <text x="112" y="300" text-anchor="end" font-size="11" opacity=".55">busy / waiting</text>
+  <text x="112" y="316" text-anchor="end" font-size="11" opacity=".55">不碰 tmux</text>
+  </g>
+</svg>
+<figcaption>虚线是绕行边：正在跑或正在等你确认的 session 直接进排序，省掉一次 <code>capture-pane</code>。橙色框是唯一有子进程开销的一步，session 一多这就是主要成本。</figcaption>
+</figure>
+
+<p>排序的顺序就是产品观点：<b>waiting</b>（卡在权限确认，去点一下）→ <b>draft</b>（字打了没发，去按回车）→ <b>idle</b>（做完了，给活）→ <b>busy</b>（别打扰）。终端版和像素版共用这一份排序。</p>
+
+<h3>状态配色</h3>
+<p>五个色相刻意拉开，在桌前灯带、椅背、显示器指示灯和地面光斑上重复四次，这样扫一眼房间就知道状态，不用读字。</p>
+<ul style="list-style:none;padding-left:0">
+  <li><span class="sw" style="background:var(--busy)"></span><code>busy</code> 打字、屏幕滚代码</li>
+  <li><span class="sw" style="background:var(--idle)"></span><code>idle</code> 靠在椅背上，屏幕自己打俄罗斯方块</li>
+  <li><span class="sw" style="background:var(--wait)"></span><code>waiting</code> 转过身举手，显示器上一个 <code>!</code></li>
+  <li><span class="sw" style="background:var(--draft)"></span><code>draft</code> 屏幕上一个光标</li>
+  <li><span class="sw" style="background:var(--unk)"></span><code>unknown</code> 整个工位 55% 透明</li>
+</ul>
+
+<h2>两个时钟</h2>
+<p>数据和画面是解耦的。拉数据 2 秒一次，画面 60 帧一秒，中间只隔着两个数组。所以窗口一直在动，但服务端每 2 秒才被打扰一次。</p>
+
+<figure>
+<svg viewBox="0 0 820 290" role="img" aria-label="poll 每两秒写入 sessions 和 rooms 两个数组，draw 每帧读取它们；渲染前先查三层缓存，命中就不重绘">
+  <defs>
+    <marker id="c1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="12.5" fill="currentColor">
+
+  <rect x="26" y="34" width="190" height="56" rx="6" fill="none" stroke="currentColor" stroke-opacity=".6"/>
+  <text x="121" y="58" text-anchor="middle">poll()</text>
+  <text x="121" y="77" text-anchor="middle" font-size="11.5" opacity=".6">setInterval 2000ms</text>
+
+  <rect x="308" y="28" width="204" height="68" rx="6" fill="none" stroke="var(--accent)" stroke-opacity=".9"/>
+  <text x="410" y="54" text-anchor="middle" fill="var(--accent)">sessions[] · rooms[]</text>
+  <text x="410" y="76" text-anchor="middle" font-size="11.5" fill="var(--accent)" opacity=".8">唯一的共享状态</text>
+
+  <rect x="604" y="34" width="190" height="56" rx="6" fill="none" stroke="currentColor" stroke-opacity=".6"/>
+  <text x="699" y="58" text-anchor="middle">draw()</text>
+  <text x="699" y="77" text-anchor="middle" font-size="11.5" opacity=".6">requestAnimationFrame</text>
+
+  <line x1="216" y1="62" x2="302" y2="62" stroke="currentColor" stroke-opacity=".55" marker-end="url(#c1)"/>
+  <text x="259" y="52" text-anchor="middle" font-size="11" opacity=".6">写</text>
+  <line x1="604" y1="62" x2="518" y2="62" stroke="currentColor" stroke-opacity=".55" marker-end="url(#c1)"/>
+  <text x="561" y="52" text-anchor="middle" font-size="11" opacity=".6">读</text>
+
+  <path d="M699 90 L699 128 L140 128" fill="none" stroke="currentColor" stroke-opacity=".45"/>
+  <text x="420" y="122" text-anchor="middle" font-size="11" opacity=".55">每帧先问缓存，命中就不重绘</text>
+  <g stroke="currentColor" stroke-opacity=".45" marker-end="url(#c1)">
+    <line x1="140" y1="128" x2="140" y2="164"/>
+    <line x1="410" y1="128" x2="410" y2="164"/>
+    <line x1="680" y1="128" x2="680" y2="164"/>
+  </g>
+
+  <g fill="none" stroke="currentColor" stroke-opacity=".6">
+    <rect x="30" y="166" width="220" height="80" rx="6"/>
+    <rect x="300" y="166" width="220" height="80" rx="6"/>
+    <rect x="570" y="166" width="220" height="80" rx="6"/>
+  </g>
+  <text x="140" y="192" text-anchor="middle">cityTile</text>
+  <text x="140" y="211" text-anchor="middle" font-size="11.5" opacity=".6">640×72 楼群，每扇窗</text>
+  <text x="140" y="228" text-anchor="middle" font-size="11.5" opacity=".6">裁一块不同的用</text>
+  <text x="410" y="192" text-anchor="middle">bgCanvas</text>
+  <text x="410" y="211" text-anchor="middle" font-size="11.5" opacity=".6">整屏夜景视差层</text>
+  <text x="410" y="228" text-anchor="middle" font-size="11.5" opacity=".6">尺寸或昼夜变才重建</text>
+  <text x="680" y="192" text-anchor="middle">plateCache</text>
+  <text x="680" y="211" text-anchor="middle" font-size="11.5" opacity=".6">一个字符串 key</text>
+  <text x="680" y="228" text-anchor="middle" font-size="11.5" opacity=".6">不变就不动 DOM</text>
+
+  <text x="30" y="276" font-size="11.5" opacity=".5">雨、闪电、打字、俄罗斯方块每帧算；楼、霓虹、名牌不是。</text>
+  </g>
+</svg>
+<figcaption>三层缓存挡住了每帧最贵的三件事。<code>plateCache</code> 那层尤其关键：名牌是真的 DOM 元素，不加这个 key 就会每帧重建几十个节点。</figcaption>
+</figure>
+
+<h2>房间是怎么排的</h2>
+<p>一个 tmux session 一间房，同名 session 里的多个 agent 坐同一间。难点不是分组，是<strong>画布该多宽</strong>——画布宽高比不匹配窗口时，缩放后会留下大片空白。</p>
+<p>做法是把 <code>packRooms(list, CW)</code> 写成纯函数：给一个候选宽度，返回排好的房间和总高度。然后 <code>buildRooms()</code> 从最宽那间房起步，每次 +40 试一遍，取宽高比最接近窗口的那个。</p>
+
+<figure>
+<svg viewBox="0 0 820 300" role="img" aria-label="以窗口宽高比为目标，从最小可行宽度开始每次加四十像素试算一个排布，选出宽高比与窗口最接近的候选">
+  <g font-family="ui-monospace,Menlo,monospace" font-size="12.5" fill="currentColor">
+
+  <text x="24" y="26" font-size="11.5" opacity=".55" letter-spacing="1">目标</text>
+  <rect x="24" y="38" width="150" height="96" rx="4" fill="none" stroke="currentColor"
+        stroke-opacity=".7" stroke-dasharray="5 4"/>
+  <text x="99" y="92" text-anchor="middle" font-size="11.5" opacity=".7">窗口宽高比</text>
+  <text x="24" y="156" font-size="11" opacity=".55">availW / availH × .94</text>
+
+  <text x="236" y="26" font-size="11.5" opacity=".55" letter-spacing="1">候选排布，宽度每次 +40</text>
+
+  <g fill="none" stroke="currentColor" stroke-opacity=".45">
+    <rect x="240" y="52" width="70" height="150" rx="4"/>
+    <rect x="336" y="82" width="104" height="120" rx="4"/>
+    <rect x="632" y="124" width="164" height="78" rx="4"/>
+  </g>
+  <rect x="466" y="106" width="140" height="96" rx="4" fill="none" stroke="var(--accent)" stroke-width="2"/>
+
+  <g font-size="11" opacity=".55" text-anchor="middle">
+    <text x="275" y="220">太窄太高</text>
+    <text x="388" y="220">还是高</text>
+    <text x="714" y="220">太扁</text>
+  </g>
+  <text x="536" y="220" text-anchor="middle" font-size="11.5" fill="var(--accent)">err 最小 → 用它</text>
+
+  <line x1="180" y1="86" x2="232" y2="86" stroke="currentColor" stroke-opacity=".4"/>
+  <text x="206" y="78" text-anchor="middle" font-size="11" opacity=".5">比</text>
+
+  <line x1="240" y1="246" x2="796" y2="246" stroke="currentColor" stroke-opacity=".3"/>
+  <text x="240" y="266" font-size="11" opacity=".5">floorW = 最宽的一间房</text>
+  <text x="796" y="266" text-anchor="end" font-size="11" opacity=".5">floorW + 3200 或提前收敛</text>
+  <text x="24" y="292" font-size="11.5" opacity=".5">选定后再往四周留 13% 边距，楼外面才看得见城市。</text>
+  </g>
+</svg>
+<figcaption>误差在对数空间比较，所以“宽了一倍”和“窄了一半”罚分相同。橙色那个是被选中的候选。楼房如果贴到画布边缘、看不见城市了，要调的就是那 13% 的边距。</figcaption>
+</figure>
+
+<h2>点击回程与安全边界</h2>
+<p>点一张名牌会真的切你的 tmux。这是整个程序唯一会改变机器状态的动作，所以 <code>/api/focus</code> 上了三道闸：</p>
+<ol>
+  <li>形状必须是 <code>^%\d+$</code>，也就是一个 tmux 面板 id，别的一律拒绝。</li>
+  <li>这个 id 必须出现在<strong>当次实时</strong> <code>collect()</code> 的结果里，不能是历史里见过的。</li>
+  <li>只执行 <code>select-window</code> 和 <code>select-pane</code>，永远不调 <code>send-keys</code>，也不拼 shell 字符串。</li>
+</ol>
+<p>服务端只绑 <code>127.0.0.1</code>。第三条是重点：能切窗口但不能替你敲键盘，误点最坏的结果是跳错窗口。</p>
+
+<h2>为什么是这个 stack</h2>
+<p>零依赖是刻意的。这东西要在几十个 tmux session 之间随时开着，任何需要 <code>npm install</code> 或者盯着构建进程的方案都会让人懒得开。</p>
+<table>
+  <tr><th>层</th><th>选了什么</th><th>代价</th></tr>
+  <tr><td>服务端</td><td>标准库 http.server</td><td>没有热重载、没有中间件，但 100 行就够，且不会有依赖过期</td></tr>
+  <tr><td>前端</td><td>单个 HTML + canvas 2D</td><td>手写像素渲染器比用库长，但改完刷新就是全部开发循环</td></tr>
+  <tr><td>状态</td><td>不存，每次重读</td><td>丢历史曲线，换来没有任何需要迁移或清理的东西</td></tr>
+</table>
+<p>HTML 是每次请求重新读盘的，所以改 <code>cc-office.html</code> 然后刷新浏览器就能看到，不用重启服务。</p>
+
+<h2>改哪里</h2>
+<table>
+  <tr><th>文件</th><th>负责</th></tr>
+  <tr><td>src/ccoffice/core.py</td><td>session 发现、状态判定、排序。两个前端共用</td></tr>
+  <tr><td>src/ccoffice/office.py</td><td>HTTP 服务、/api/sessions、/api/focus 的三道闸</td></tr>
+  <tr><td>src/ccoffice/fleet.py</td><td>终端表格版</td></tr>
+  <tr><td>src/ccoffice/cc-office.html</td><td>全部画面：排房间、场景、角色、俄罗斯方块、名牌</td></tr>
+  <tr><td>bin/*.js</td><td>node 壳，让 npm 也能装同一套入口</td></tr>
+</table>
+
+<div class="note"><b>已知的坑：</b>一个 tmux 窗口可能塞两个 Claude 面板（<code>new88:0.0</code> 和 <code>new88:0.1</code>），所以只有在 <code>window_panes &gt; 1</code> 时标签才带上 pane 序号，否则 <code>session:window</code> 会撞名。</div>
+
+<p class="foot">cc-office · 文档随代码放在 <code>docs/architecture.html</code>，改了逻辑记得同步这里。</p>
+
+</div>
+</body>
+</html>

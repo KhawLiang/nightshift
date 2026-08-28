@@ -39,6 +39,12 @@ npm link                  # then cc-office / cc-fleet on PATH
 npx .                     # run without installing
 ```
 
+## How it works
+
+`docs/architecture.html` is the illustrated version: where the data comes
+from, how a session's state is derived, the two clocks, and the canvas-width
+search. Open it in a browser.
+
 ## Stack
 
 Deliberately dependency-free.
