@@ -1,8 +1,8 @@
 {
-  "name": "cc-office",
-  "version": "0.1.0",
-  "description": "Pixel-art office + terminal status board for every Claude Code session on this machine",
-  "bin": { "cc-office": "bin/cc-office.js", "cc-fleet": "bin/cc-fleet.js" },
+  "name": "nightshift",
+  "version": "0.2.0",
+  "description": "A pixel office showing every Claude Code session on this Mac: who is working, who is waiting on you",
+  "bin": { "nightshift": "bin/nightshift.js" },
   "files": ["bin", "src", "README.md"],
   "engines": { "node": ">=16" },
   "private": true,

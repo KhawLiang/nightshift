@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""cc-office - pixel-art office view of every Claude Code session on this machine.
+"""nightshift - pixel-art office view of every Claude Code session on this machine.
 
 Serves a local page (loopback only) that renders each session as a character:
 typing at a desk when busy, wandering off when idle, standing up with a `!`
 when it's blocked on you.
 
-Usage:  cc-office              start and open a browser
-        cc-office --port 9000
-        cc-office --no-open
+Usage:  nightshift              start and open a browser
+        nightshift --port 9000
+        nightshift --no-open
 """
 import json, os, re, sys, subprocess, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -15,12 +15,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HERE = os.path.dirname(os.path.realpath(__file__))
 from .core import collect
 
-PAGE = os.path.join(HERE, "cc-office.html")
+PAGE = os.path.join(HERE, "office.html")
 PANE_RE = re.compile(r"^%\d+$")
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "cc-office"
+    server_version = "nightshift"
 
     def log_message(self, *a):
         pass                                   # keep the terminal quiet
@@ -90,14 +90,14 @@ def main():
     try:
         srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     except OSError as e:
-        print("cc-office: cannot bind %s (%s)" % (url, e)); sys.exit(1)
-    print("cc-office serving %s  (ctrl-c to stop)" % url)
+        print("nightshift: cannot bind %s (%s)" % (url, e)); sys.exit(1)
+    print("nightshift serving %s  (ctrl-c to stop)" % url)
     if "--no-open" not in args:
         webbrowser.open(url)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
-        print("\ncc-office stopped")
+        print("\nnightshift stopped")
 
 
 

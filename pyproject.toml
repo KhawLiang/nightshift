@@ -3,19 +3,18 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "cc-office"
-version = "0.1.0"
-description = "Pixel-art office + terminal status board for every Claude Code session on this machine"
+name = "nightshift"
+version = "0.2.0"
+description = "A pixel office showing every Claude Code session on this Mac: who is working, who is waiting on you"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = []          # stdlib only, on purpose
 
 [project.scripts]
-cc-office = "ccoffice.office:main"
-cc-fleet  = "ccoffice.fleet:main"
+nightshift = "nightshift.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-ccoffice = ["*.html"]
+nightshift = ["*.html"]

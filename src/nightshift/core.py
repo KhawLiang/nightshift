@@ -1,4 +1,4 @@
-"""Shared session-discovery for cc-fleet (terminal) and cc-office (pixel UI).
+"""Shared session-discovery for the terminal board and the pixel office.
 
 Everything comes from the registry Claude Code maintains at ~/.claude/sessions/,
 plus a peek at each tmux pane for input typed but never submitted.

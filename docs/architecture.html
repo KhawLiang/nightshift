@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>cc-office 处理逻辑</title>
+<title>nightshift 处理逻辑</title>
 <style>
   :root{
     --bg:#faf9f6; --panel:#ffffff; --ink:#191713; --dim:#5d574d;
@@ -66,12 +66,12 @@
 <div class="wrap">
 
 <header>
-  <h1>cc-office 背后的处理逻辑</h1>
+  <h1>nightshift 背后的处理逻辑</h1>
   <p class="lede">这台 Mac 上每个 Claude Code session 是怎么被发现、判断状态、然后画成一间办公室的。</p>
 </header>
 
 <h2>一句话</h2>
-<p>Claude Code 自己会把每个 session 的状态写成 JSON 落盘，cc-office 只是<strong>读这份现成的注册表</strong>，补一次 tmux 面板快照来判断“有没有打了字没发”，然后把结果扔给浏览器画成像素画。没有 agent、没有数据库、没有轮询 API。</p>
+<p>Claude Code 自己会把每个 session 的状态写成 JSON 落盘，nightshift 只是<strong>读这份现成的注册表</strong>，补一次 tmux 面板快照来判断“有没有打了字没发”，然后把结果扔给浏览器画成像素画。没有 agent、没有数据库、没有轮询 API。</p>
 
 <h2>数据从哪来</h2>
 <p>三个来源，全部是本机文件或本机命令：</p>
@@ -359,21 +359,22 @@
   <tr><td>前端</td><td>单个 HTML + canvas 2D</td><td>手写像素渲染器比用库长，但改完刷新就是全部开发循环</td></tr>
   <tr><td>状态</td><td>不存，每次重读</td><td>丢历史曲线，换来没有任何需要迁移或清理的东西</td></tr>
 </table>
-<p>HTML 是每次请求重新读盘的，所以改 <code>cc-office.html</code> 然后刷新浏览器就能看到，不用重启服务。</p>
+<p>HTML 是每次请求重新读盘的，所以改 <code>office.html</code> 然后刷新浏览器就能看到，不用重启服务。</p>
 
 <h2>改哪里</h2>
 <table>
   <tr><th>文件</th><th>负责</th></tr>
-  <tr><td>src/ccoffice/core.py</td><td>session 发现、状态判定、排序。两个前端共用</td></tr>
-  <tr><td>src/ccoffice/office.py</td><td>HTTP 服务、/api/sessions、/api/focus 的三道闸</td></tr>
-  <tr><td>src/ccoffice/fleet.py</td><td>终端表格版</td></tr>
-  <tr><td>src/ccoffice/cc-office.html</td><td>全部画面：排房间、场景、角色、俄罗斯方块、名牌</td></tr>
-  <tr><td>bin/*.js</td><td>node 壳，让 npm 也能装同一套入口</td></tr>
+  <tr><td>src/nightshift/cli.py</td><td>入口分发：默认开办公室，<code>board</code> 走终端版</td></tr>
+  <tr><td>src/nightshift/core.py</td><td>session 发现、状态判定、排序。两个前端共用</td></tr>
+  <tr><td>src/nightshift/office.py</td><td>HTTP 服务、/api/sessions、/api/focus 的三道闸</td></tr>
+  <tr><td>src/nightshift/fleet.py</td><td>终端表格版</td></tr>
+  <tr><td>src/nightshift/office.html</td><td>全部画面：排房间、场景、角色、俄罗斯方块、名牌</td></tr>
+  <tr><td>bin/nightshift.js</td><td>node 壳，让 npm 也能装同一个入口</td></tr>
 </table>
 
 <div class="note"><b>已知的坑：</b>一个 tmux 窗口可能塞两个 Claude 面板（<code>new88:0.0</code> 和 <code>new88:0.1</code>），所以只有在 <code>window_panes &gt; 1</code> 时标签才带上 pane 序号，否则 <code>session:window</code> 会撞名。</div>
 
-<p class="foot">cc-office · 文档随代码放在 <code>docs/architecture.html</code>，改了逻辑记得同步这里。</p>
+<p class="foot">nightshift · 文档随代码放在 <code>docs/architecture.html</code>，改了逻辑记得同步这里。</p>
 
 </div>
 </body>

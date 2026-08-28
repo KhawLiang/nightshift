@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""cc-fleet - live status board for all Claude Code sessions on this machine.
+"""nightshift board - live status board for all Claude Code sessions on this machine.
 
 Sorted by "how much does this one need you", most urgent first:
   waiting  blocked on a permission prompt   -> answer it
@@ -7,12 +7,12 @@ Sorted by "how much does this one need you", most urgent first:
   idle     finished, awaiting instruction   -> give it work
   busy     working                          -> leave it alone
 
-Usage:  cc-fleet            live, refresh every 2s
-        cc-fleet -n 5       refresh every 5s
-        cc-fleet --once     print once
-        cc-fleet --brief    one line for the tmux status bar
+Usage:  nightshift board            live, refresh every 2s
+        nightshift board -n 5       refresh every 5s
+        nightshift board --once     print once
+        nightshift board --brief    one line for the tmux status bar
 
-Session discovery lives in core.py, shared with cc-office.
+Session discovery lives in core.py, shared with the office view.
 """
 import os, sys, time, signal
 

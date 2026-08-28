@@ -12,6 +12,6 @@ module.exports = function run(mod) {
     if (r.error && r.error.code === "ENOENT") continue;   // try the next interpreter
     process.exit(r.status === null ? 1 : r.status);
   }
-  console.error("cc-office: no python3 on PATH (needs Python 3.9+; no other dependencies)");
+  console.error("nightshift: no python3 on PATH (needs Python 3.9+; no other dependencies)");
   process.exit(127);
 };
