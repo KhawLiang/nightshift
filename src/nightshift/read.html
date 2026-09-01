@@ -110,6 +110,8 @@ pre{margin:0;font:12px/1.55 var(--mono);white-space:pre-wrap;word-break:break-wo
 code{font:12.5px var(--mono);background:#141d27;border:1px solid var(--line);
   border-radius:4px;padding:.5px 4px;color:#c2d0de}
 .say b{color:#fff;font-weight:600}
+.say .h{display:block;font-weight:600;color:#fff;margin:.7em 0 .1em}
+.say hr{border:0;border-top:1px solid var(--line);margin:1em 0}
 .say a{color:var(--you)}
 
 .side{opacity:.82;border-left:2px solid #2a3646;margin-left:6px;padding-left:10px}
@@ -172,7 +174,9 @@ function md(t){
       .replace(/`([^`\n]+)`/g, (m,c) => "<code>" + c + "</code>")
       .replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")
       .replace(/(^|\s)(https?:\/\/[^\s<)]+)/g,
-               '$1<a href="$2" target="_blank" rel="noreferrer">$2</a>');
+               '$1<a href="$2" target="_blank" rel="noreferrer">$2</a>')
+      .replace(/^#{1,6}[ \t]+(.+)$/gm, '<span class="h">$1</span>')
+      .replace(/^ {0,3}(?:-{3,}|\*{3,})[ \t]*$/gm, "<hr>");
   return t.replace(/\u0000(\d+)\u0000/g,
                    (m,i) => '<pre class="code">' + esc(fences[+i]) + "</pre>");
 }
@@ -190,7 +194,7 @@ function summarize(inp){
 /* ---------- session list ---------- */
 async function loadSessions(){
   let d;
-  try { d = await (await fetch("/api/sessions")).json(); } catch(e){ return; }
+  try { d = await (await fetch("/api/read/sessions")).json(); } catch(e){ return; }
   S.sessions = d.sessions;
   renderList();
   const r = S.sid && S.sessions.find(s => s.sid === S.sid);
@@ -257,7 +261,7 @@ async function poll(first){
   if(!S.sid || S.busy) return;
   S.busy = true;
   try{
-    const u = "/api/transcript?sid=" + S.sid + (S.next === null ? "" : "&from=" + S.next);
+    const u = "/api/read/transcript?sid=" + S.sid + (S.next === null ? "" : "&from=" + S.next);
     const d = await (await fetch(u)).json();
     if(d.error){ S.busy = false; return; }
     if(d.reset){ S.busy = false; return openSession(S.sid, 0); }

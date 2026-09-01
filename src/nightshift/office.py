@@ -14,11 +14,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 from .core import collect, focus_pane
+from .read import ReaderRoutes
 
 PAGE = os.path.join(HERE, "office.html")
 
 
-class Handler(BaseHTTPRequestHandler):
+class Handler(ReaderRoutes, BaseHTTPRequestHandler):
     server_version = "nightshift"
 
     def log_message(self, *a):
@@ -41,14 +42,17 @@ class Handler(BaseHTTPRequestHandler):
         self._send(code, json.dumps(obj), "application/json; charset=utf-8")
 
     def do_GET(self):
-        path = self.path.split("?")[0]
+        path, _, query = self.path.partition("?")
+        q = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
+        if self.reader_get(path, q):             # /read and /api/read/*
+            return
         if path == "/":
             try:
                 with open(PAGE, "rb") as f:     # re-read so edits are live
                     return self._send(200, f.read(), "text/html; charset=utf-8")
             except OSError as e:
                 return self._send(500, "cannot read %s: %s" % (PAGE, e), "text/plain")
-        if path == "/api/sessions":
+        if path == "/api/sessions":              # the office: live desks only
             import time
             return self._json(200, {"now": int(time.time() * 1000),
                                     "sessions": collect()})

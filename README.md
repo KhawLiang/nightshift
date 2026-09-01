@@ -12,7 +12,8 @@ Three views, same registry:
 - **`nightshift board`** — the same thing as a terminal table, sorted by "how
   much does this one need you": waiting → draft → idle → busy.
 - **`nightshift read`** — what they are actually *saying*. Every session on the
-  left, its conversation on the right, tailed as it is written.
+  left, its conversation on the right, tailed as it is written. The office
+  serves it too, at `/read`, so one command gives you both.
 
 ## Run
 
@@ -26,13 +27,18 @@ nightshift board --once
 nightshift board -n 5
 nightshift board --brief   # one line, for tmux status-right
 
-nightshift read            # serve 127.0.0.1:8788 and open a browser
+nightshift read            # the reader on its own, 127.0.0.1:8788
 nightshift read --port 9001
 nightshift read --no-open
 ```
 
+Nothing has to be switched on to record a session: Claude Code writes every
+conversation to disk as it happens. The reader only reads those files.
+
 In the office: `f` toggles fullscreen, hover a desk for its unsent draft,
-click a desk to `tmux select-window` + `select-pane` onto it.
+click a desk to `tmux select-window` + `select-pane` onto it, **shift-click a
+desk to read that session's conversation**, `r` (or the header button) opens the
+reader on its own.
 
 In the reader: `j`/`k` walk the session list, `/` filters it, `t` hides tool
 calls, `h` shows thinking markers, `f` unsticks from the newest message,
@@ -84,7 +90,7 @@ Deliberately dependency-free.
 | Layer | What |
 | --- | --- |
 | Data | `~/.claude/sessions/<pid>.json`, written by Claude Code itself, plus `tmux capture-pane` for unsubmitted drafts, plus the transcript `.jsonl` for the reader |
-| Server | `http.server.ThreadingHTTPServer`, stdlib, loopback only |
+| Server | `http.server.ThreadingHTTPServer`, stdlib, loopback only; the office also serves the reader at `/read` + `/api/read/*` |
 | UI | one HTML file, canvas 2D, hand-rolled pixel renderer, no framework, no build step |
 
 `src/nightshift/office.html` is re-read on every request, so editing it and
@@ -98,7 +104,7 @@ src/nightshift/
   core.py           session discovery, shared by all three views
   office.py         HTTP server + /api/sessions + /api/focus
   fleet.py          terminal renderer
-  read.py           transcript parser + tailing server
+  read.py           transcript parser + the /read routes both servers wear
   office.html       the animation
   read.html         the reader
 bin/                node shim, so npm can install the same entry point
@@ -111,6 +117,9 @@ Both servers bind `127.0.0.1` only. `/api/focus` accepts a tmux pane id matching
 `^%\d+$` **and** present in a live `collect()`, then runs only `select-window`
 and `select-pane`. It never calls `send-keys` and never builds a shell string.
 
-The reader is read-only and cannot type into a session. `/api/transcript` takes
-a session id that must match the UUID shape and must resolve through a glob
-under `~/.claude/projects/` - no path from the browser ever reaches `open()`.
+The reader is read-only and cannot type into a session. `/api/read/transcript`
+takes a session id that must match the UUID shape and must resolve through a
+glob under `~/.claude/projects/` - no path from the browser ever reaches
+`open()`. It is namespaced under `/api/read/` because the office's own
+`/api/sessions` must keep returning live sessions only: the reader's list also
+carries ended ones, and those have no desk to sit at.

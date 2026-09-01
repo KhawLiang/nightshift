@@ -100,8 +100,9 @@
 
 <header>
   <span class="brand">nightshift</span>
-  <span style="color:var(--dim)" id="hint">click a desk to focus that tmux window</span>
+  <span style="color:var(--dim)" id="hint">click a desk to focus that tmux window &middot; shift-click to read it</span>
   <span class="counts" id="counts"></span>
+  <button id="rd" title="read the conversations (r)">read</button>
   <button id="fs" title="fullscreen (f)">&#9974;</button>
   <span class="beat" id="beat"></span>
 </header>
@@ -1135,7 +1136,7 @@ function layout(hits, scale){
     const spot = (a.where && a.where !== "-") ? (a.where.split(":")[1] || a.where) : a.name;
     p.innerHTML = '<div class="nm" style="color:'+col+'">'+esc(a.state)+'</div>'
                 + '<div class="sub">'+esc(spot)+' &middot; '+esc(a.quiet_str)+'</div>';
-    p.addEventListener("click", ()=>focusPane(a));
+    p.addEventListener("click", e=> (e.shiftKey||e.metaKey||e.altKey) ? openRead(a) : focusPane(a));
     p.addEventListener("mouseenter", e=>showTip(e,a));
     p.addEventListener("mousemove", e=>moveTip(e));
     p.addEventListener("mouseleave", hideTip);
@@ -1151,7 +1152,8 @@ function showTip(e,a){
     + '<div><span class="k">cwd   </span>'+esc(a.cwd)+'</div>'
     + '<div><span class="k">up '+esc(a.age)+' &middot; quiet '+esc(a.quiet_str)+'</span></div>'
     + (a.draft ? '<span class="snip" style="color:'+C.draft+'">unsent: '+esc(a.draft)+'</span>'
-               : (a.snip ? '<span class="snip">'+esc(a.snip)+'</span>' : ''));
+               : (a.snip ? '<span class="snip">'+esc(a.snip)+'</span>' : ''))
+    + '<div class="k" style="margin-top:6px">click focus &middot; shift-click read</div>';
   tip.style.display = "block"; moveTip(e);
 }
 function moveTip(e){
@@ -1169,6 +1171,11 @@ function toast(msg){
   const el = document.getElementById("toast");
   el.textContent = msg; el.classList.add("on");
   clearTimeout(toastT); toastT = setTimeout(()=>el.classList.remove("on"), 2200);
+}
+
+/* the transcript lives on the same server, at /read */
+function openRead(a){
+  window.open("/read" + (a && a.sid ? "?sid=" + a.sid : ""), "_blank");
 }
 
 async function focusPane(a){
@@ -1215,7 +1222,12 @@ function toggleFull(){
   else document.documentElement.requestFullscreen().catch(()=>{});
 }
 document.getElementById("fs").addEventListener("click", toggleFull);
-addEventListener("keydown", e=>{ if (e.key === "f" && !e.metaKey && !e.ctrlKey) toggleFull(); });
+document.getElementById("rd").addEventListener("click", ()=>openRead(null));
+addEventListener("keydown", e=>{
+  if (e.metaKey || e.ctrlKey) return;
+  if (e.key === "f") toggleFull();
+  if (e.key === "r") openRead(null);
+});
 addEventListener("resize", ()=>{ plateCache=""; buildRooms(sessions); });
 addEventListener("fullscreenchange", ()=>{ plateCache=""; setTimeout(()=>buildRooms(sessions), 60); });
 poll(); setInterval(poll, 2000);

@@ -242,7 +242,54 @@ def sessions():
     return rows
 
 
-class Handler(BaseHTTPRequestHandler):
+class ReaderRoutes:
+    """The reader's GET routes, mixed into both servers.
+
+    The office and the reader are two views of the same registry, so `nightshift`
+    serves both on one port: the office at /, the reader at /read. Namespaced
+    under /api/read/ because the office's own /api/sessions must keep returning
+    live sessions only - the reader's list also carries ended ones, and those
+    have no desk to sit at."""
+
+    def reader_get(self, path, q):
+        if path in ("/read", "/read/"):
+            try:
+                with open(PAGE, "rb") as f:      # re-read so edits are live
+                    self._send(200, f.read(), "text/html; charset=utf-8")
+            except OSError as e:
+                self._send(500, "cannot read %s: %s" % (PAGE, e), "text/plain")
+            return True
+        if path == "/api/read/sessions":
+            self._json(200, {"now": int(time.time() * 1000), "sessions": sessions()})
+            return True
+        if path == "/api/read/transcript":
+            sid = q.get("sid", "")
+            if not SID_RE.match(sid):
+                self._json(400, {"error": "bad session id"})
+                return True
+            hits = glob.glob(os.path.join(PROJ, "*", sid + ".jsonl"))
+            if not hits:
+                self._json(404, {"error": "no transcript"})
+                return True
+            start = None
+            if "from" in q:
+                try:
+                    start = max(0, int(q["from"]))
+                except ValueError:
+                    start = None
+            try:
+                ev, nxt, size, trimmed, reset = tail(hits[0], start)
+            except OSError as e:
+                self._json(500, {"error": str(e)})
+                return True
+            title, cwd = probe(hits[0])
+            self._json(200, dict(events=ev, next=nxt, size=size, trimmed=trimmed,
+                                 reset=reset, title=title, cwd=cwd))
+            return True
+        return False
+
+
+class Handler(ReaderRoutes, BaseHTTPRequestHandler):
     server_version = "nightshift-read"
 
     def log_message(self, *a):
@@ -268,35 +315,9 @@ class Handler(BaseHTTPRequestHandler):
         path, _, query = self.path.partition("?")
         q = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
         if path == "/":
-            try:
-                with open(PAGE, "rb") as f:     # re-read so edits are live
-                    return self._send(200, f.read(), "text/html; charset=utf-8")
-            except OSError as e:
-                return self._send(500, "cannot read %s: %s" % (PAGE, e), "text/plain")
-        if path == "/api/sessions":
-            return self._json(200, {"now": int(time.time() * 1000),
-                                    "sessions": sessions()})
-        if path == "/api/transcript":
-            sid = q.get("sid", "")
-            if not SID_RE.match(sid):
-                return self._json(400, {"error": "bad session id"})
-            hits = glob.glob(os.path.join(PROJ, "*", sid + ".jsonl"))
-            if not hits:
-                return self._json(404, {"error": "no transcript"})
-            start = None
-            if "from" in q:
-                try:
-                    start = max(0, int(q["from"]))
-                except ValueError:
-                    start = None
-            try:
-                ev, nxt, size, trimmed, reset = tail(hits[0], start)
-            except OSError as e:
-                return self._json(500, {"error": str(e)})
-            title, cwd = probe(hits[0])
-            return self._json(200, dict(events=ev, next=nxt, size=size,
-                                        trimmed=trimmed, reset=reset,
-                                        title=title, cwd=cwd))
+            path = "/read"                       # standalone: the reader is home
+        if self.reader_get(path, q):
+            return
         return self._send(404, "not found", "text/plain")
 
     def do_POST(self):
