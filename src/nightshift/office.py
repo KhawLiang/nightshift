@@ -9,14 +9,13 @@ Usage:  nightshift              start and open a browser
         nightshift --port 9000
         nightshift --no-open
 """
-import json, os, re, sys, subprocess, webbrowser
+import json, os, sys, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.realpath(__file__))
-from .core import collect
+from .core import collect, focus_pane
 
 PAGE = os.path.join(HERE, "office.html")
-PANE_RE = re.compile(r"^%\d+$")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -64,19 +63,9 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             return self._json(400, {"error": "bad body"})
         pane = body.get("pane") or ""
-        # 1. shape must be a tmux pane id and nothing else
-        if not isinstance(pane, str) or not PANE_RE.match(pane):
-            return self._json(400, {"error": "not a pane id"})
-        # 2. and it must be a pane we are actually tracking right now
-        if pane not in {s["pane"] for s in collect() if s["pane"]}:
-            return self._json(400, {"error": "unknown pane"})
-        # 3. select-window/select-pane only - never send-keys, never a shell string
-        try:
-            for cmd in ("select-window", "select-pane"):
-                subprocess.run(["tmux", cmd, "-t", pane],
-                               capture_output=True, timeout=2, check=True)
-        except Exception as e:
-            return self._json(500, {"error": str(e)})
+        err = focus_pane(pane)          # validates the pane, then selects it
+        if err:
+            return self._json(400 if "pane" in err else 500, {"error": err})
         return self._json(200, {"ok": True, "pane": pane})
 
 

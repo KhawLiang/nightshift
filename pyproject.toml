@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nightshift"
-version = "0.2.0"
-description = "A pixel office showing every Claude Code session on this Mac: who is working, who is waiting on you"
+version = "0.3.0"
+description = "A pixel office, a status board and a live transcript reader for every Claude Code session on this Mac"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = []          # stdlib only, on purpose

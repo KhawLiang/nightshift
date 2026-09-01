@@ -3,13 +3,14 @@
 Everything comes from the registry Claude Code maintains at ~/.claude/sessions/,
 plus a peek at each tmux pane for input typed but never submitted.
 """
-import json, os, time, glob, subprocess
+import json, os, re, time, glob, subprocess
 
 HOME = os.path.expanduser("~")
 SESS = os.path.join(HOME, ".claude", "sessions")
 PROJ = os.path.join(HOME, ".claude", "projects")
 
 RANK = dict(waiting=0, draft=1, idle=2, busy=3, unknown=4)
+PANE_RE = re.compile(r"^%\d+$")
 
 
 def alive(pid):
@@ -38,6 +39,14 @@ def _tmux(*args, timeout=1.5):
         return ""
 
 
+def transcript_path(sid):
+    """Where Claude Code keeps this session's conversation, or ''."""
+    if not sid:
+        return ""
+    hits = glob.glob(os.path.join(PROJ, "*", sid + ".jsonl"))
+    return hits[0] if hits else ""
+
+
 _tcache = {}
 
 
@@ -45,10 +54,9 @@ def transcript(sid):
     """(mtime, last-activity-snippet) for a session, cached on mtime."""
     if not sid:
         return (0, "")
-    hits = glob.glob(os.path.join(PROJ, "*", sid + ".jsonl"))
-    if not hits:
+    p = transcript_path(sid)
+    if not p:
         return (0, "")
-    p = hits[0]
     try:
         m = os.path.getmtime(p)
     except OSError:
@@ -160,6 +168,7 @@ def collect():
                           d.get("updatedAt") or 0, tm * 1000))
         rows.append(dict(
             name=d.get("name") or "?",
+            sid=d.get("sessionId") or "",
             state=st,
             draft=draft,
             pane=pane_id(tmux),
@@ -175,3 +184,22 @@ def collect():
         ))
     rows.sort(key=lambda r: (RANK[r["state"]], r["name"]))
     return rows
+
+
+def focus_pane(pane):
+    """Jump the terminal to a tmux pane. Returns '' on success, else why not.
+
+    Deliberately narrow: the pane must look like a pane id *and* be one we are
+    tracking right now, and only select-window/select-pane ever run - never
+    send-keys, never a shell string."""
+    if not isinstance(pane, str) or not PANE_RE.match(pane):
+        return "not a pane id"
+    if pane not in {s["pane"] for s in collect() if s["pane"]}:
+        return "unknown pane"
+    try:
+        for cmd in ("select-window", "select-pane"):
+            subprocess.run(["tmux", cmd, "-t", pane],
+                           capture_output=True, timeout=2, check=True)
+    except Exception as e:
+        return str(e)
+    return ""

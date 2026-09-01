@@ -2,14 +2,17 @@
 
 A pixel office for every Claude Code session running on this Mac. One room per
 tmux session, one desk per agent, rainy night city out the windows. You glance
-at it and know who is working and who is waiting on you.
+at it and know who is working and who is waiting on you - and when you want to
+know *what* one of them is doing, `nightshift read` shows the conversation.
 
-Two views, same data:
+Three views, same registry:
 
 - **`nightshift`** — the office, in a browser. Click a desk to jump to that
   tmux pane.
 - **`nightshift board`** — the same thing as a terminal table, sorted by "how
   much does this one need you": waiting → draft → idle → busy.
+- **`nightshift read`** — what they are actually *saying*. Every session on the
+  left, its conversation on the right, tailed as it is written.
 
 ## Run
 
@@ -22,10 +25,19 @@ nightshift board           # live, refresh every 2s
 nightshift board --once
 nightshift board -n 5
 nightshift board --brief   # one line, for tmux status-right
+
+nightshift read            # serve 127.0.0.1:8788 and open a browser
+nightshift read --port 9001
+nightshift read --no-open
 ```
 
 In the office: `f` toggles fullscreen, hover a desk for its unsent draft,
 click a desk to `tmux select-window` + `select-pane` onto it.
+
+In the reader: `j`/`k` walk the session list, `/` filters it, `t` hides tool
+calls, `h` shows thinking markers, `f` unsticks from the newest message,
+`g`/`G` jump to the top or the bottom. Click a tool call to see its full input
+and result. **focus pane** puts your terminal on that session.
 
 ## Install
 
@@ -51,13 +63,27 @@ Open it in a browser.
 The short version: Claude Code already writes each session's state to disk, so
 nothing here has to be inferred.
 
+The reader adds one more file Claude Code already keeps:
+`~/.claude/projects/<slug>/<sessionId>.jsonl`, one JSON object per line,
+appended as the conversation happens. So following a live session is a byte
+offset: the browser sends back where it stopped and gets only what was written
+since. Opening a session reads a window off the end (widened until it holds
+enough events - one pasted image can be bigger than the whole window), with
+"load full history" for the rest.
+
+Two things that look like bugs but are not: **thinking is never readable** -
+Claude Code writes the encrypted signature and an empty string, so the reader
+shows only a marker where a pause happened; and **ended sessions have no name**,
+because the registry entry is gone the moment the process exits, so they are
+listed by their AI title instead.
+
 ## Stack
 
 Deliberately dependency-free.
 
 | Layer | What |
 | --- | --- |
-| Data | `~/.claude/sessions/<pid>.json`, written by Claude Code itself, plus `tmux capture-pane` for unsubmitted drafts |
+| Data | `~/.claude/sessions/<pid>.json`, written by Claude Code itself, plus `tmux capture-pane` for unsubmitted drafts, plus the transcript `.jsonl` for the reader |
 | Server | `http.server.ThreadingHTTPServer`, stdlib, loopback only |
 | UI | one HTML file, canvas 2D, hand-rolled pixel renderer, no framework, no build step |
 
@@ -68,17 +94,23 @@ refreshing the browser is the whole dev loop. No bundler, no watcher.
 
 ```
 src/nightshift/
-  cli.py            entry point: office, or `board` for the terminal view
-  core.py           session discovery, shared by both views
+  cli.py            entry point: office, or `board` / `read`
+  core.py           session discovery, shared by all three views
   office.py         HTTP server + /api/sessions + /api/focus
   fleet.py          terminal renderer
+  read.py           transcript parser + tailing server
   office.html       the animation
+  read.html         the reader
 bin/                node shim, so npm can install the same entry point
 docs/               illustrated architecture notes
 ```
 
 ## Safety note
 
-The server binds `127.0.0.1` only. `/api/focus` accepts a tmux pane id matching
+Both servers bind `127.0.0.1` only. `/api/focus` accepts a tmux pane id matching
 `^%\d+$` **and** present in a live `collect()`, then runs only `select-window`
 and `select-pane`. It never calls `send-keys` and never builds a shell string.
+
+The reader is read-only and cannot type into a session. `/api/transcript` takes
+a session id that must match the UUID shape and must resolve through a glob
+under `~/.claude/projects/` - no path from the browser ever reaches `open()`.

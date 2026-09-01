@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>nightshift read</title>
+<style>
+:root{
+  --bg:#0a0e14; --panel:#0e141c; --panel2:#121a24; --line:#1c2733;
+  --tx:#d6dee9; --dim:#8b95a1; --dimmer:#5d6773;
+  --busy:#ffb020; --idle:#3ddc97; --waiting:#ff4757; --draft:#c77dff;
+  --unknown:#8b95a1; --ended:#4a5563; --you:#57b6ff;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.6 var(--sans);
+  display:grid;grid-template-columns:290px 1fr;overflow:hidden}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#1f2a36;border-radius:9px}
+::-webkit-scrollbar-thumb:hover{background:#2c3a49}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- sidebar ---------- */
+aside{background:var(--panel);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0}
+.brand{padding:14px 14px 10px;border-bottom:1px solid var(--line)}
+.brand h1{margin:0;font:600 13px/1.2 var(--mono);letter-spacing:.14em;
+  text-transform:uppercase;color:var(--tx)}
+.brand p{margin:5px 0 0;font-size:11px;color:var(--dimmer)}
+.search{padding:9px 10px;border-bottom:1px solid var(--line)}
+.search input{width:100%;padding:7px 9px;border-radius:7px;border:1px solid var(--line);
+  background:var(--bg);color:var(--tx);font:12px var(--mono);outline:none}
+.search input:focus{border-color:#2e3d4d}
+.list{overflow-y:auto;flex:1;padding:6px 0 20px}
+.group{padding:12px 14px 5px;font:600 10px var(--mono);letter-spacing:.14em;
+  text-transform:uppercase;color:var(--dimmer)}
+.s{display:grid;grid-template-columns:8px 1fr auto;gap:9px;align-items:baseline;
+  padding:8px 13px;cursor:pointer;border-left:2px solid transparent}
+.s:hover{background:var(--panel2)}
+.s.on{background:var(--panel2);border-left-color:currentColor}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;
+  transform:translateY(-1px)}
+.s.busy{color:var(--busy)} .s.idle{color:var(--idle)} .s.waiting{color:var(--waiting)}
+.s.draft{color:var(--draft)} .s.unknown{color:var(--unknown)} .s.ended{color:var(--ended)}
+.s .nm{font:12px var(--mono);color:var(--tx);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.s .ti{grid-column:2;font-size:11px;color:var(--dim);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.s .q{font:10px var(--mono);color:var(--dimmer)}
+.s.busy .dot{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* ---------- main ---------- */
+main{display:flex;flex-direction:column;min-width:0;min-height:0}
+header{display:flex;align-items:center;gap:12px;padding:11px 18px;
+  border-bottom:1px solid var(--line);background:var(--panel)}
+header .who{font:13px var(--mono);color:var(--tx);flex:none}
+header .meta{font-size:11px;color:var(--dimmer);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+header .sp{flex:1}
+.badge{font:10px var(--mono);letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 7px;border-radius:5px;border:1px solid currentColor;opacity:.9;flex:none}
+button{font:11px var(--mono);color:var(--dim);background:transparent;
+  border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer;flex:none}
+button:hover{color:var(--tx);border-color:#31404f}
+button.on{color:var(--tx);border-color:#3a4b5c;background:var(--panel2)}
+
+.feed{flex:1;overflow-y:auto;padding:22px 0 40px}
+.wrap{max-width:920px;margin:0 auto;padding:0 26px}
+.ev{margin:0 0 16px}
+.lbl{font:10px var(--mono);letter-spacing:.13em;text-transform:uppercase;
+  color:var(--dimmer);margin-bottom:5px}
+.body{white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere}
+
+.user{border-left:2px solid var(--you);padding:2px 0 2px 14px}
+.user .lbl{color:var(--you);opacity:.75}
+.say{padding-left:16px}
+.cmd{font:12px var(--mono);color:var(--draft);padding-left:16px;opacity:.85}
+.note{font:11px var(--mono);color:var(--dimmer);padding-left:16px}
+
+.think{padding-left:16px;color:var(--dim);font-style:italic;
+  border-left:1px dashed #253141}
+.think .body{font-size:13px;color:#8fa0b3}
+body.no-think .think{display:none}
+body.no-tools .tool{display:none}
+
+.tool{margin-left:16px;border:1px solid var(--line);border-radius:8px;
+  background:var(--panel);overflow:hidden}
+.tool>.hd{display:flex;gap:9px;align-items:center;padding:7px 11px;cursor:pointer;
+  font:12px var(--mono)}
+.tool>.hd:hover{background:var(--panel2)}
+.tool .caret{color:var(--dimmer);width:9px;flex:none;transition:transform .12s}
+.tool.open .caret{transform:rotate(90deg)}
+.tool .nme{color:var(--busy);flex:none}
+.tool .sum{color:var(--dim);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;flex:1}
+.tool .st{font-size:10px;color:var(--dimmer);flex:none}
+.tool .st.bad{color:var(--waiting)}
+.tool .det{display:none;border-top:1px solid var(--line)}
+.tool.open .det{display:block}
+.tool .sec{padding:9px 12px}
+.tool .sec+.sec{border-top:1px solid var(--line)}
+.tool .cap{font:10px var(--mono);letter-spacing:.11em;text-transform:uppercase;
+  color:var(--dimmer);margin-bottom:5px}
+pre{margin:0;font:12px/1.55 var(--mono);white-space:pre-wrap;word-break:break-word;
+  overflow-wrap:anywhere;color:#b9c6d4;max-height:460px;overflow-y:auto}
+.say pre.code{background:var(--panel);border:1px solid var(--line);border-radius:7px;
+  padding:10px 12px;margin:9px 0;max-height:none}
+code{font:12.5px var(--mono);background:#141d27;border:1px solid var(--line);
+  border-radius:4px;padding:.5px 4px;color:#c2d0de}
+.say b{color:#fff;font-weight:600}
+.say a{color:var(--you)}
+
+.side{opacity:.82;border-left:2px solid #2a3646;margin-left:6px;padding-left:10px}
+.tsep{display:flex;align-items:center;gap:11px;margin:26px 0 16px;
+  font:10px var(--mono);letter-spacing:.13em;color:var(--dimmer)}
+.tsep::before,.tsep::after{content:"";height:1px;background:var(--line);flex:1}
+.more{display:block;margin:0 auto 22px}
+.empty{color:var(--dimmer);text-align:center;padding:70px 20px;font:12px var(--mono)}
+footer{border-top:1px solid var(--line);background:var(--panel);padding:6px 18px;
+  font:10.5px var(--mono);color:var(--dimmer);display:flex;gap:16px}
+.live{color:var(--idle)}
+</style>
+
+<aside>
+  <div class="brand">
+    <h1>nightshift read</h1>
+    <p id="count">...</p>
+  </div>
+  <div class="search"><input id="q" placeholder="filter sessions  ( / )" spellcheck="false"></div>
+  <div class="list" id="list"></div>
+</aside>
+
+<main>
+  <header>
+    <span class="badge" id="state" style="display:none"></span>
+    <span class="who" id="who">&mdash;</span>
+    <span class="meta" id="meta"></span>
+    <span class="sp"></span>
+    <button id="bThink" title="thinking blocks (h)">thinking</button>
+    <button id="bTools" class="on" title="tool calls (t)">tools</button>
+    <button id="bFollow" class="on" title="stick to the newest message (f)">follow</button>
+    <button id="bJump" title="jump this terminal to that tmux pane">focus pane</button>
+  </header>
+  <div class="feed" id="feed"><div class="wrap"><div class="empty">pick a session on the left</div></div></div>
+  <footer>
+    <span id="fState">idle</span>
+    <span id="fCount"></span>
+    <span id="fPath"></span>
+  </footer>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const S = {sid:null, next:null, sessions:[], row:null, tools:{}, n:0, lastDay:"",
+           follow:true, filter:"", busy:false};
+
+/* ---------- helpers ---------- */
+const esc = s => (s||"").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const hhmm = ts => { const d = new Date(ts||0);
+  return (!ts || isNaN(d)) ? "" : d.toTimeString().slice(0,5); };
+const day = ts => { const d = new Date(ts||0);
+  return (!ts || isNaN(d)) ? "" : d.toDateString(); };
+
+/* just enough markdown that a reply reads the way it did in the terminal */
+function md(t){
+  const fences = [], MARK = "\u0000";   /* survives esc(), absent from prose */
+  t = (t||"").replace(/```(\w*)\n?([\s\S]*?)```/g, (m,l,c) =>
+      MARK + (fences.push(c.replace(/\n$/,"")) - 1) + MARK);
+  t = esc(t)
+      .replace(/`([^`\n]+)`/g, (m,c) => "<code>" + c + "</code>")
+      .replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")
+      .replace(/(^|\s)(https?:\/\/[^\s<)]+)/g,
+               '$1<a href="$2" target="_blank" rel="noreferrer">$2</a>');
+  return t.replace(/\u0000(\d+)\u0000/g,
+                   (m,i) => '<pre class="code">' + esc(fences[+i]) + "</pre>");
+}
+
+/* one line that says what a tool call is actually doing */
+function summarize(inp){
+  if(!inp || typeof inp !== "object") return "";
+  const p = k => typeof inp[k] === "string" ? inp[k] : "";
+  const first = p("command") || p("file_path") || p("path") || p("pattern") ||
+                p("query") || p("skill") || p("url") || p("description") || p("prompt");
+  if(first) return first.replace(/\s+/g," ").trim();
+  try { return JSON.stringify(inp).slice(0,160); } catch(e){ return ""; }
+}
+
+/* ---------- session list ---------- */
+async function loadSessions(){
+  let d;
+  try { d = await (await fetch("/api/sessions")).json(); } catch(e){ return; }
+  S.sessions = d.sessions;
+  renderList();
+  const r = S.sid && S.sessions.find(s => s.sid === S.sid);
+  if(r){ S.row = r; head(); }
+}
+
+function renderList(){
+  const f = S.filter.toLowerCase();
+  const keep = s => !f || (s.name + " " + (s.title||"") + " " + s.cwd).toLowerCase().includes(f);
+  const live = S.sessions.filter(s => s.live && keep(s));
+  const ended = S.sessions.filter(s => !s.live && keep(s));
+  const box = $("#list");
+  box.innerHTML = "";
+  const add = (title, rows) => {
+    if(!rows.length) return;
+    const h = document.createElement("div");
+    h.className = "group";
+    h.textContent = title + "  " + rows.length;
+    box.appendChild(h);
+    for(const s of rows){
+      const el = document.createElement("div");
+      el.className = "s " + s.state + (s.sid === S.sid ? " on" : "");
+      el.innerHTML = '<span class="dot"></span>' +
+        '<span class="nm">' + esc(s.name) + '</span>' +
+        '<span class="q">' + esc(s.quiet_str) + '</span>' +
+        '<span class="ti">' + esc(s.name === s.title ? s.cwd : (s.title || s.cwd || "")) + '</span>';
+      el.onclick = () => openSession(s.sid);
+      box.appendChild(el);
+    }
+  };
+  add("running", live);
+  add("ended", ended);
+  $("#count").textContent = live.length + " live · " + ended.length + " recent";
+}
+
+/* ---------- header ---------- */
+function head(){
+  const r = S.row;
+  if(!r){ $("#who").textContent = "—"; $("#meta").textContent = ""; return; }
+  $("#who").textContent = r.name;
+  $("#meta").textContent = [r.title, r.cwd, r.where !== "-" ? r.where : "", r.model]
+                             .filter(Boolean).join("   ·   ");
+  const b = $("#state");
+  b.style.display = "";
+  b.textContent = r.state;
+  b.style.color = getComputedStyle(document.documentElement)
+                    .getPropertyValue("--" + r.state) || "#8b95a1";
+  $("#bJump").style.display = r.pane ? "" : "none";
+  $("#fPath").textContent = r.sid ? "~/.claude/projects/.../" + r.sid.slice(0,8) + ".jsonl" : "";
+}
+
+/* ---------- transcript ---------- */
+function openSession(sid, from){
+  S.sid = sid;
+  S.next = (from === undefined ? null : from);
+  S.row = S.sessions.find(s => s.sid === sid) || null;
+  S.tools = {}; S.n = 0; S.lastDay = "";
+  S.follow = true; $("#bFollow").classList.add("on");
+  $("#feed").innerHTML = '<div class="wrap" id="wrap"></div>';
+  renderList(); head(); poll(true);
+}
+
+async function poll(first){
+  if(!S.sid || S.busy) return;
+  S.busy = true;
+  try{
+    const u = "/api/transcript?sid=" + S.sid + (S.next === null ? "" : "&from=" + S.next);
+    const d = await (await fetch(u)).json();
+    if(d.error){ S.busy = false; return; }
+    if(d.reset){ S.busy = false; return openSession(S.sid, 0); }
+    S.next = d.next;
+    if(first && d.trimmed) headBanner();
+    if(d.events.length) append(d.events);
+    $("#fCount").textContent = S.n + " events · " + (d.size/1024|0) + " KB on disk";
+  }catch(e){}
+  S.busy = false;
+}
+
+function headBanner(){
+  const b = document.createElement("button");
+  b.className = "more";
+  b.textContent = "load full history";
+  b.onclick = () => openSession(S.sid, 0);
+  $("#wrap").appendChild(b);
+}
+
+function append(evs){
+  const wrap = $("#wrap");
+  if(!wrap) return;
+  const feed = $("#feed");
+  const stuck = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 150;
+  for(const e of evs){
+    if(e.k === "result"){ attach(e); continue; }
+    const d = day(e.ts);
+    if(d && d !== S.lastDay){
+      S.lastDay = d;
+      const sep = document.createElement("div");
+      sep.className = "tsep";
+      sep.textContent = d;
+      wrap.appendChild(sep);
+    }
+    const el = node(e);
+    if(!el) continue;
+    if(e.side) el.classList.add("side");
+    wrap.appendChild(el);
+    S.n++;
+  }
+  if(S.follow && stuck) feed.scrollTop = feed.scrollHeight;
+}
+
+function node(e){
+  const el = document.createElement("div");
+  el.className = "ev " + e.k;
+  if(e.k === "user"){
+    el.innerHTML = '<div class="lbl">you · ' + hhmm(e.ts) + '</div>' +
+                   '<div class="body">' + md(e.text) + '</div>';
+  } else if(e.k === "say"){
+    el.innerHTML = '<div class="lbl">claude · ' + hhmm(e.ts) + '</div>' +
+                   '<div class="body">' + md(e.text) + '</div>';
+  } else if(e.k === "think"){
+    el.innerHTML = e.sealed
+      ? '<div class="lbl">thought &middot; encrypted, not kept on disk</div>'
+      : '<div class="lbl">thinking</div><div class="body">' + esc(e.text) + '</div>';
+  } else if(e.k === "cmd"){
+    el.textContent = "/" + e.text.replace(/^\//, "") + (e.args ? " " + e.args : "");
+  } else if(e.k === "note"){
+    el.innerHTML = '<div class="body">' + esc(e.text) + '</div>';
+  } else if(e.k === "tool"){
+    el.innerHTML =
+      '<div class="hd"><span class="caret">▸</span><span class="nme">' + esc(e.name) +
+      '</span><span class="sum">' + esc(summarize(e.input)) +
+      '</span><span class="st">···</span></div>' +
+      '<div class="det"><div class="sec"><div class="cap">input</div><pre>' +
+      esc(JSON.stringify(e.input, null, 2)) + '</pre></div></div>';
+    el.querySelector(".hd").onclick = () => el.classList.toggle("open");
+    if(e.id) S.tools[e.id] = el;
+  } else return null;
+  return el;
+}
+
+function attach(e){
+  const txt = (e.text || "") + (e.imgs ? "\n[" + e.imgs + " image(s)]" : "");
+  const el = S.tools[e.id];
+  if(!el){                                  /* its call scrolled off the top */
+    const wrap = $("#wrap");
+    if(!wrap) return;
+    const orphan = document.createElement("div");
+    orphan.className = "ev tool";
+    orphan.innerHTML = '<div class="hd"><span class="caret">▸</span>' +
+      '<span class="nme">result</span><span class="sum">' +
+      esc(txt.split("\n")[0].slice(0,120)) + '</span></div>' +
+      '<div class="det"><div class="sec"><pre>' + esc(txt) + '</pre></div></div>';
+    orphan.querySelector(".hd").onclick = () => orphan.classList.toggle("open");
+    wrap.appendChild(orphan);
+    S.n++;
+    return;
+  }
+  const st = el.querySelector(".st");
+  const lines = txt ? txt.split("\n").length : 0;
+  st.textContent = e.ok ? (lines ? lines + "L" : "ok") : "error";
+  st.classList.toggle("bad", !e.ok);
+  const sec = document.createElement("div");
+  sec.className = "sec";
+  sec.innerHTML = '<div class="cap">' + (e.ok ? "result" : "error") + '</div><pre>' +
+                  esc(txt || "(empty)") + '</pre>';
+  el.querySelector(".det").appendChild(sec);
+}
+
+/* ---------- controls ---------- */
+const toggle = (btn, cls) => {
+  btn.classList.toggle("on");
+  document.body.classList.toggle(cls, !btn.classList.contains("on"));
+};
+$("#bThink").onclick = () => toggle($("#bThink"), "no-think");
+$("#bTools").onclick = () => toggle($("#bTools"), "no-tools");
+$("#bFollow").onclick = () => {
+  S.follow = !S.follow;
+  $("#bFollow").classList.toggle("on", S.follow);
+  if(S.follow) $("#feed").scrollTop = $("#feed").scrollHeight;
+};
+$("#bJump").onclick = () => {
+  if(!S.row || !S.row.pane) return;
+  fetch("/api/focus", {method:"POST", headers:{"Content-Type":"application/json"},
+                       body: JSON.stringify({pane: S.row.pane})});
+};
+$("#q").oninput = e => { S.filter = e.target.value; renderList(); };
+document.body.classList.add("no-think");
+
+addEventListener("keydown", e => {
+  if(e.target.tagName === "INPUT"){ if(e.key === "Escape") e.target.blur(); return; }
+  if(e.key === "/"){ e.preventDefault(); $("#q").focus(); return; }
+  if(e.key === "t") $("#bTools").click();
+  if(e.key === "h") $("#bThink").click();
+  if(e.key === "f") $("#bFollow").click();
+  if(e.key === "g") $("#feed").scrollTop = 0;
+  if(e.key === "G") $("#feed").scrollTop = $("#feed").scrollHeight;
+  if(e.key === "j" || e.key === "k"){
+    const vis = [...document.querySelectorAll(".s")];
+    const i = vis.findIndex(el => el.classList.contains("on"));
+    const nx = vis[Math.max(0, Math.min(vis.length - 1, i + (e.key === "j" ? 1 : -1)))];
+    if(nx) nx.click();
+  }
+});
+$("#feed").addEventListener("scroll", () => {
+  const f = $("#feed");
+  if(S.follow && f.scrollHeight - f.scrollTop - f.clientHeight > 250){
+    S.follow = false;
+    $("#bFollow").classList.remove("on");
+  }
+});
+
+/* ---------- clocks ---------- */
+loadSessions().then(() => {
+  const want = new URLSearchParams(location.search).get("sid");
+  const first = S.sessions.find(s => s.sid === want) ||
+                S.sessions.find(s => s.live && s.has);
+  if(first) openSession(first.sid);
+});
+setInterval(loadSessions, 4000);
+setInterval(() => {
+  poll(false);
+  $("#fState").textContent = S.sid ? "following" : "idle";
+  $("#fState").className = S.sid ? "live" : "";
+}, 1500);
+</script>

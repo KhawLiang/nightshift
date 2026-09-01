@@ -1,10 +1,18 @@
 {
   "name": "nightshift",
-  "version": "0.2.0",
-  "description": "A pixel office showing every Claude Code session on this Mac: who is working, who is waiting on you",
-  "bin": { "nightshift": "bin/nightshift.js" },
-  "files": ["bin", "src", "README.md"],
-  "engines": { "node": ">=16" },
+  "version": "0.3.0",
+  "description": "A pixel office, a status board and a live transcript reader for every Claude Code session on this Mac",
+  "bin": {
+    "nightshift": "bin/nightshift.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
   "private": true,
   "license": "MIT"
 }
