@@ -26,6 +26,7 @@ nightshift board           # live, refresh every 2s
 nightshift board --once
 nightshift board -n 5
 nightshift board --brief   # one line, for tmux status-right
+nightshift board --all     # include background agents
 
 nightshift herdr           # what the herdr backend sees, when it misbehaves
 
@@ -109,6 +110,13 @@ CLI's `pane focus` moves to a neighbour by direction.
 Drafts are read only for `kind: "interactive"` sessions. Background agents are
 children of an interactive one and share its pane, so they would otherwise
 inherit - and mis-report - its unsent text.
+
+For the same reason they get no desk in the office and no row on the board:
+Claude Code keeps spare ones warm, they have no prompt of their own, and there
+is nothing to click through to. `nightshift board --all` shows them, and the
+reader still lists them - a background agent can be doing real work worth
+reading. This is what makes the office line up with herdr's own agent sidebar,
+which shows one row per pane.
 
 ## Stack
 

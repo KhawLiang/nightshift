@@ -13,7 +13,7 @@ import json, os, sys, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.realpath(__file__))
-from .core import collect, focus_pane
+from .core import collect, focus_pane, interactive
 from .read import ReaderRoutes
 
 PAGE = os.path.join(HERE, "office.html")
@@ -52,10 +52,10 @@ class Handler(ReaderRoutes, BaseHTTPRequestHandler):
                     return self._send(200, f.read(), "text/html; charset=utf-8")
             except OSError as e:
                 return self._send(500, "cannot read %s: %s" % (PAGE, e), "text/plain")
-        if path == "/api/sessions":              # the office: live desks only
+        if path == "/api/sessions":              # the office: desks only
             import time
             return self._json(200, {"now": int(time.time() * 1000),
-                                    "sessions": collect()})
+                                    "sessions": interactive(collect())})
         return self._send(404, "not found", "text/plain")
 
     def do_POST(self):

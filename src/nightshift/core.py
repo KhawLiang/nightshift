@@ -206,6 +206,17 @@ def collect():
     return rows
 
 
+def interactive(rows):
+    """Only the sessions you can actually talk to.
+
+    Background agents (`kind: "bg"`) are spawned by an interactive session and
+    share its pane - Claude Code keeps spare ones warm - so they have no prompt
+    of their own and nothing to click through to. They are still in `collect()`,
+    and the reader still lists them; they just do not get a desk.
+    """
+    return [r for r in rows if r.get("kind") == "interactive"]
+
+
 def focus_pane(pane):
     """Jump the terminal to a pane. Returns '' on success, else why not.
 

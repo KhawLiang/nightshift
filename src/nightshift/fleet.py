@@ -11,12 +11,13 @@ Usage:  nightshift board            live, refresh every 2s
         nightshift board -n 5       refresh every 5s
         nightshift board --once     print once
         nightshift board --brief    one line for the tmux status bar
+        nightshift board --all      include background agents
 
 Session discovery lives in core.py, shared with the office view.
 """
 import os, sys, time, signal
 
-from .core import collect, ago, RANK
+from .core import collect, interactive, ago, RANK
 
 R = "\033[0m"
 CLR = dict(waiting="\033[31m", draft="\033[35m", idle="\033[32m",
@@ -51,10 +52,17 @@ def render(rows, width):
     return "\n".join(out)
 
 
+def rows_for(args):
+    """Background agents are hidden unless asked for - they share their parent's
+    pane and there is nothing to do with them."""
+    rows = collect()
+    return rows if "--all" in args else interactive(rows)
+
+
 def main():
     args = sys.argv[1:]
     if "--brief" in args:
-        rows = collect()
+        rows = rows_for(args)
         b = sum(1 for r in rows if r["state"] == "busy")
         w = sum(1 for r in rows if r["state"] in ("waiting", "draft"))
         print("CC %d busy%s" % (b, (" !%d" % w) if w else ""))
@@ -64,7 +72,7 @@ def main():
         try: iv = float(args[args.index("-n") + 1])
         except Exception: pass
     if "--once" in args or "-1" in args:
-        print(render(collect(), 110)); return
+        print(render(rows_for(args), 110)); return
     signal.signal(signal.SIGINT, lambda *a: (sys.stdout.write("\033[?25h\n"), sys.exit(0)))
     sys.stdout.write("\033[?25l")
     try:
@@ -72,7 +80,7 @@ def main():
             try: width = os.get_terminal_size().columns
             except OSError: width = 110
             sys.stdout.write("\033[H\033[2J" + BOLD + "  Claude Code fleet\n" + R
-                             + render(collect(), width) + "\n")
+                             + render(rows_for(args), width) + "\n")
             sys.stdout.flush()
             time.sleep(iv)
     finally:
