@@ -100,7 +100,7 @@
 
 <header>
   <span class="brand">nightshift</span>
-  <span style="color:var(--dim)" id="hint">click a desk to focus that tmux window &middot; shift-click to read it</span>
+  <span style="color:var(--dim)" id="hint">click a desk to focus that pane &middot; shift-click to read it</span>
   <span class="counts" id="counts"></span>
   <button id="rd" title="read the conversations (r)">read</button>
   <button id="fs" title="fullscreen (f)">&#9974;</button>
@@ -1180,12 +1180,13 @@ function openRead(a){
 
 async function focusPane(a){
   const sess = (a.where||"").split(":")[0];
-  if (!a.pane) { toast(a.name + " isn't in tmux"); return; }
+  if (!a.pane) { toast(a.name + " isn't in tmux or herdr"); return; }
   try {
     const r = await fetch("/api/focus", {method:"POST", headers:{"Content-Type":"application/json"},
                                          body: JSON.stringify({pane:a.pane})});
     const j = await r.json();
     if (!r.ok) { toast("could not focus: " + (j.error||r.status)); return; }
+    if (a.mux !== "tmux") { toast(a.where + " focused"); return; }
     const cmd = "tmux attach -t " + sess;
     try { await navigator.clipboard.writeText(cmd); toast(a.where + " focused · copied “" + cmd + "”"); }
     catch { toast(a.where + " focused"); }

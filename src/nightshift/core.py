@@ -5,6 +5,8 @@ plus a peek at each tmux pane for input typed but never submitted.
 """
 import json, os, re, time, glob, subprocess
 
+from . import herdr
+
 HOME = os.path.expanduser("~")
 SESS = os.path.join(HOME, ".claude", "sessions")
 PROJ = os.path.join(HOME, ".claude", "projects")
@@ -108,11 +110,8 @@ def pane_id(tmux):
     return tmux.rsplit(".", 1)[-1]
 
 
-def pane_draft(pane):
-    """Text sitting in the prompt box, typed but never submitted."""
-    if not pane:
-        return ""
-    txt = _tmux("capture-pane", "-p", "-t", pane)
+def _draft_in(txt):
+    """The prompt line of a captured screen, if something is sitting in it."""
     for ln in reversed(txt.splitlines()[-30:]):
         s = ln.strip()
         for mark in ("❯", ">"):
@@ -120,6 +119,15 @@ def pane_draft(pane):
                 rest = s[len(mark):].strip()
                 return rest if rest and not rest.startswith("─") else ""
     return ""
+
+
+def pane_draft(pane, mux="tmux"):
+    """Text sitting in the prompt box, typed but never submitted."""
+    if not pane:
+        return ""
+    if mux == "herdr":
+        return _draft_in(herdr.read(pane))
+    return _draft_in(_tmux("capture-pane", "-p", "-t", pane))
 
 
 def where(tmux):
@@ -155,12 +163,22 @@ def collect():
         if not alive(d.get("pid")):
             continue
         tmux = d.get("tmux") or ""
+        pane, mux, spot = pane_id(tmux), "tmux", ""
+        if not pane and herdr.available():
+            # herdr is its own runtime, so the registry has no pane to hand us -
+            # claim one by walking the session's process ancestry.
+            pane, spot = herdr.pane_for(d.get("pid"))
+            mux = "herdr" if pane else ""
         st = (d.get("status") or "unknown").lower()
         if st not in RANK:
             st = "unknown"
+        kind = d.get("kind") or "interactive"
         draft = ""
-        if st in ("idle", "unknown"):        # only a stopped session holds a draft
-            draft = pane_draft(pane_id(tmux))
+        # Only a stopped session holds a draft, and only an interactive one has a
+        # prompt box at all: background agents share their parent's pane, and
+        # would otherwise inherit - and mis-report - its unsent text.
+        if st in ("idle", "unknown") and kind == "interactive":
+            draft = pane_draft(pane, mux)
             if draft:
                 st = "draft"
         tm, snip = transcript(d.get("sessionId", ""))
@@ -169,10 +187,12 @@ def collect():
         rows.append(dict(
             name=d.get("name") or "?",
             sid=d.get("sessionId") or "",
+            kind=kind,
             state=st,
             draft=draft,
-            pane=pane_id(tmux),
-            where=where(tmux),
+            pane=pane,
+            mux=mux,
+            where=spot or where(tmux),
             cwd=(d.get("cwd") or "").replace(HOME, "~"),
             started=d.get("startedAt"),
             touched=touched,
@@ -187,15 +207,22 @@ def collect():
 
 
 def focus_pane(pane):
-    """Jump the terminal to a tmux pane. Returns '' on success, else why not.
+    """Jump the terminal to a pane. Returns '' on success, else why not.
 
     Deliberately narrow: the pane must look like a pane id *and* be one we are
-    tracking right now, and only select-window/select-pane ever run - never
-    send-keys, never a shell string."""
-    if not isinstance(pane, str) or not PANE_RE.match(pane):
+    tracking right now, and only select-window/select-pane (or `herdr pane
+    focus`) ever run - never send-keys, never a shell string."""
+    shaped = isinstance(pane, str) and (PANE_RE.match(pane) or
+                                        (herdr.available() and herdr.ID_RE.match(pane)))
+    if not shaped:
         return "not a pane id"
-    if pane not in {s["pane"] for s in collect() if s["pane"]}:
+    rows = {s["pane"]: s for s in collect() if s["pane"]}
+    if pane not in rows:
         return "unknown pane"
+    if rows[pane]["mux"] == "herdr":
+        return herdr.focus(pane)
+    if not PANE_RE.match(pane):
+        return "not a pane id"
     try:
         for cmd in ("select-window", "select-pane"):
             subprocess.run(["tmux", cmd, "-t", pane],

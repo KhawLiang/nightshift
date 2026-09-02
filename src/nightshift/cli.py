@@ -19,6 +19,8 @@ USAGE = """nightshift - who on this Mac is working, and who is waiting on you
   nightshift board -n 5      refresh every 5s
   nightshift board --brief   one line, for a tmux status bar
 
+  nightshift herdr           what the herdr backend sees (diagnostic)
+
   nightshift read            conversation reader, opens a browser
   nightshift read --port N   serve somewhere else
   nightshift read --no-open  serve without opening a browser
@@ -30,6 +32,9 @@ def main():
     if args and args[0] in ("-h", "--help", "help"):
         print(USAGE)
         return
+    if args and args[0] == "herdr":
+        from .herdr import main as diag
+        return diag()
     if args and args[0] == "read":
         from .read import main as reader
         sys.argv = ["nightshift read"] + args[1:]

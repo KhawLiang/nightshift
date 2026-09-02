@@ -27,6 +27,8 @@ nightshift board --once
 nightshift board -n 5
 nightshift board --brief   # one line, for tmux status-right
 
+nightshift herdr           # what the herdr backend sees, when it misbehaves
+
 nightshift read            # the reader on its own, 127.0.0.1:8788
 nightshift read --port 9001
 nightshift read --no-open
@@ -83,13 +85,38 @@ shows only a marker where a pause happened; and **ended sessions have no name**,
 because the registry entry is gone the moment the process exits, so they are
 listed by their AI title instead.
 
+## tmux, or herdr
+
+The registry records a `tmux` pane reference and nothing else, so a session run
+under [herdr](https://herdr.dev) - its own runtime, not a layer on tmux - arrives
+with no pane: no room to sit in, no draft detection, no click-to-focus. So when
+a session has no tmux pane and herdr's socket is up, `herdr.py` claims one by
+walking the session's process ancestry to a pane's shell pid, then speaks to
+herdr's socket API in place of tmux:
+
+| | tmux | herdr |
+| --- | --- | --- |
+| where it sits | registry's `tmux` field | `pane.list` + `pane.process_info` |
+| unsent draft | `capture-pane -p` | `pane.read --source visible` |
+| click to focus | `select-window` + `select-pane` | `pane.focus` |
+
+Both can be on screen at once - a herdr workspace becomes a room next to the
+tmux ones. The socket is spoken to directly rather than through the `herdr` CLI:
+it is one newline-terminated JSON object each way, it avoids exec'ing an 19 MB
+binary every poll, and `pane.focus` (focus *this* pane) only exists there - the
+CLI's `pane focus` moves to a neighbour by direction.
+
+Drafts are read only for `kind: "interactive"` sessions. Background agents are
+children of an interactive one and share its pane, so they would otherwise
+inherit - and mis-report - its unsent text.
+
 ## Stack
 
 Deliberately dependency-free.
 
 | Layer | What |
 | --- | --- |
-| Data | `~/.claude/sessions/<pid>.json`, written by Claude Code itself, plus `tmux capture-pane` for unsubmitted drafts, plus the transcript `.jsonl` for the reader |
+| Data | `~/.claude/sessions/<pid>.json`, written by Claude Code itself, plus `tmux capture-pane` (or herdr's `pane.read`) for unsubmitted drafts, plus the transcript `.jsonl` for the reader |
 | Server | `http.server.ThreadingHTTPServer`, stdlib, loopback only; the office also serves the reader at `/read` + `/api/read/*` |
 | UI | one HTML file, canvas 2D, hand-rolled pixel renderer, no framework, no build step |
 
@@ -105,6 +132,7 @@ src/nightshift/
   office.py         HTTP server + /api/sessions + /api/focus
   fleet.py          terminal renderer
   read.py           transcript parser + the /read routes both servers wear
+  herdr.py          herdr backend, for sessions that are not in tmux
   office.html       the animation
   read.html         the reader
 bin/                node shim, so npm can install the same entry point
