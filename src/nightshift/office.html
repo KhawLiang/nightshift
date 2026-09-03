@@ -1463,14 +1463,15 @@ function drawNav(){
                     + esc(nm[1])+'</div>'
                     + '<div class="rs">'+esc(stateLabel(a))+' &middot; '+esc(a.quiet_str)
                     + (bg ? ' <span class="tag">bg</span>' : '')+'</div></div>';
-      if (a.pane) {                                    // bg agents share a pane, so no jump
-        const go = document.createElement("span");
-        go.className = "go"; go.textContent = "\u25b8"; go.title = "focus " + a.where;
-        go.addEventListener("click", e=>{ e.stopPropagation(); focusPane(a); });
-        row.appendChild(go);
-      }
-      row.addEventListener("click", e=> (e.shiftKey||e.altKey) ? focusPane(a)
-                                      : openTalk(a, e.metaKey || e.ctrlKey));
+      const go = document.createElement("span");     // the transcript is always there
+      go.className = "go"; go.textContent = "\u2261";
+      go.title = "read " + a.name + "'s conversation";
+      go.addEventListener("click", e=>{ e.stopPropagation(); openTalk(a, e.metaKey||e.ctrlKey); });
+      row.appendChild(go);
+      // same as clicking the person: the row takes you to the pane, and an agent
+      // with no pane of its own can only be read
+      row.addEventListener("click", e=> (e.shiftKey||e.altKey || !a.pane)
+                                      ? openTalk(a, e.metaKey || e.ctrlKey) : focusPane(a));
       row.addEventListener("mouseenter", e=>{ hoverName = a.name; showTip(e,a); });
       row.addEventListener("mousemove", e=>moveTip(e));
       row.addEventListener("mouseleave", ()=>{ hoverName = ""; hideTip(); });
