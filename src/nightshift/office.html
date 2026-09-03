@@ -1284,7 +1284,9 @@ function stateLabel(a){
   return a.state === "busy" ? "working" : a.state;
 }
 function labelColor(a){
-  if (a.watching) return C.viewing;
+  // your own pane, gone quiet: it finished while you were looking elsewhere
+  if (a.watching) return (a.state === "idle" || a.state === "unknown")
+    ? C.unread : C.viewing;
   return (a.unread && (a.state === "idle" || a.state === "unknown"))
     ? C.unread : stateColor(a.state);
 }
