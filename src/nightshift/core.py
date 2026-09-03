@@ -249,9 +249,11 @@ def collect():
     # the pane you have focused is one you are looking at, so it is never unread -
     # stamped to disk when the focus moves, or once every half minute, not every poll
     watching = herdr.current()[1] if herdr.available() else ""
+    for r in rows:
+        r["watching"] = bool(watching) and r["sid"] == watching
     if watching:
         for r in rows:
-            if r["sid"] == watching:
+            if r["watching"]:
                 r["unread"] = False
         now = time.time()
         if watching != _focus["sid"] or now - _focus["t"] > 30:

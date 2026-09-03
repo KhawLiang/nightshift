@@ -224,7 +224,7 @@ const C = {
   couch:"#7a5a52", couchHi:"#8f6b61", couchLo:"#5e453f",
   print:"#c9cfd2", printHi:"#e2e7e9", printLo:"#8f979b",
   busy:"#ffb020", idle:"#3ddc97", wait:"#ff4757", draft:"#c77dff", unk:"#8b95a1",
-  unread:"#5bc8ff"
+  unread:"#5bc8ff", viewing:"#f1eee6"
 };
 const SKIN  = ["#eec09a","#d9a377","#b07d53","#8d5a3b","#f2d3b4","#6b4630"];
 const HAIR  = ["#2b241e","#5f3b22","#c9a227","#8c3b2e","#39557a","#7a4f7d","#d9d3c8","#43302a"];
@@ -1022,6 +1022,12 @@ function drawStation(dx,dy,a,t){
   ctx.fillStyle = pool; ctx.fillRect(dx-30, dy+40, DW+60, 112);
 
   const lit = hoverName === a.name;
+  const here = !!a.watching;
+  if (here && !lit) {                                          // where you are sitting
+    const w = ctx.createRadialGradient(cx, dy+26, 8, cx, dy+26, 78);
+    w.addColorStop(0, "#ffffff1c"); w.addColorStop(1, "#ffffff00");
+    ctx.fillStyle = w; ctx.fillRect(dx-20, dy-60, DW+40, 150);
+  }
   if (lit) {                                                  // hover: light them up
     const h = ctx.createRadialGradient(cx, dy+26, 8, cx, dy+26, 82);
     h.addColorStop(0, col + "3d"); h.addColorStop(.6, col + "16"); h.addColorStop(1, col + "00");
@@ -1178,9 +1184,9 @@ function drawStation(dx,dy,a,t){
     g.addColorStop(0, col + "26"); g.addColorStop(1, col + "00");
     ctx.fillStyle = g; ctx.fillRect(dx-24, dy-104, DW+48, 150);
   }
-  if (lit) {                                    // a pixel reticle around the one you'd read
+  if (lit || here) {                            // a pixel reticle: hover, or you
     const x0 = dx+32, y0 = dy-18, bw = 86, bh = 96, L = 10, T = 2;
-    ctx.fillStyle = col;
+    ctx.fillStyle = lit ? col : "#f1eee655";
     [[x0, y0, 1, 1], [x0+bw, y0, -1, 1], [x0, y0+bh, 1, -1], [x0+bw, y0+bh, -1, -1]]
       .forEach(([bx, by, sx2, sy2])=>{
         ctx.fillRect(sx2 > 0 ? bx : bx-L, sy2 > 0 ? by : by-T, L, T);
@@ -1273,10 +1279,12 @@ function splitName(name, leaf){
 /* `busy` is the registry's word; "working" is what it looks like. An idle
    session holding output you have not opened yet reads as "unread". */
 function stateLabel(a){
+  if (a.watching) return "viewing";               // this is the pane you are in
   if (a.unread && (a.state === "idle" || a.state === "unknown")) return "unread";
   return a.state === "busy" ? "working" : a.state;
 }
 function labelColor(a){
+  if (a.watching) return C.viewing;
   return (a.unread && (a.state === "idle" || a.state === "unknown"))
     ? C.unread : stateColor(a.state);
 }

@@ -79,7 +79,9 @@ focused in herdr, since a pane you are looking at is not one you are behind on
 written when the focus moves or every 30s, not on every poll).
 Anything written since then makes the session **unread**, and an idle session
 with unread output says so on its desk plate, in the rail, on the board and in
-the header count, in blue instead of green. Busy sessions say `working` rather
+the header count, in blue instead of green. The session whose pane you have
+focused right now says **viewing** instead, in white, with a soft glow and a
+faint reticle on its desk - that one is you. Busy sessions say `working` rather
 than the registry's `busy`; a session actively typing is not something you are
 behind on.
 

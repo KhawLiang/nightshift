@@ -29,6 +29,8 @@ LABEL = dict(busy="working")
 
 
 def label(r):
+    if r.get("watching"):                        # the pane you are sitting in
+        return "viewing"
     if r.get("unread") and r["state"] in ("idle", "unknown"):
         return "unread"
     return LABEL.get(r["state"], r["state"])

@@ -54,7 +54,7 @@ aside{background:var(--panel);border-right:1px solid var(--line);
 .dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
 .s.busy{color:var(--busy)} .s.idle{color:var(--idle)} .s.waiting{color:var(--waiting)}
 .s.draft{color:var(--draft)} .s.unknown{color:var(--unknown)} .s.ended{color:var(--ended)}
-.s.unread{color:var(--unread)} .s .rs{color:inherit}
+.s.unread{color:var(--unread)} .s.viewing{color:var(--tx)} .s .rs{color:inherit}
 .s.ended{opacity:.72} .s.ended:hover,.s.ended.on{opacity:1}
 .s .nm{font:11px var(--mono);color:var(--tx);flex:1;min-width:0;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
@@ -242,7 +242,8 @@ const S = {sid:null, next:null, sessions:[], row:null, tools:{}, n:0, lastDay:""
 /* ---------- helpers ---------- */
 /* the registry says `busy`; a person says "working". And an idle session with
    output you have not opened yet is "unread". */
-const stateLabel = r => (r.unread && (r.state === "idle" || r.state === "unknown"))
+const stateLabel = r => r.watching ? "viewing"
+  : (r.unread && (r.state === "idle" || r.state === "unknown"))
   ? "unread" : (r.state === "busy" ? "working" : r.state);
 
 const esc = s => (s||"").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
@@ -330,14 +331,14 @@ function renderList(){
     for(const s of g.rows){
       const el = document.createElement("div");
       const lbl = stateLabel(s);
-      el.className = "s " + (lbl === "unread" ? "unread" : s.state) +
+      el.className = "s " + (lbl === "unread" || lbl === "viewing" ? lbl : s.state) +
                      (s.sid === S.sid ? " on" : "");
       el.title = [s.name, s.title, s.cwd].filter(Boolean).join("\n");
       const sub = s.title && s.title !== s.name ? s.title : "";
       el.innerHTML =
         '<div class="top"><span class="dot"></span>' +
         '<span class="nm">' + esc(s.name) + '</span>' +
-        '<span class="q">' + esc(lbl === "unread" ? "unread" : s.quiet_str) + '</span></div>' +
+        '<span class="q">' + esc(lbl === "unread" || lbl === "viewing" ? lbl : s.quiet_str) + '</span></div>' +
         (sub ? '<div class="ti">' + esc(sub) + '</div>' : '');
       el.onclick = () => openSession(s.sid);
       box.appendChild(el);
@@ -377,7 +378,8 @@ function head(){
   const lbl = stateLabel(r);
   b.textContent = lbl;
   b.style.color = getComputedStyle(document.documentElement)
-                    .getPropertyValue("--" + (lbl === "unread" ? "unread" : r.state))
+                    .getPropertyValue("--" + (lbl === "unread" ? "unread"
+                                              : lbl === "viewing" ? "tx" : r.state))
                   || "#8b95a1";
   $("#bJump").style.display = r.pane ? "" : "none";
   dockState();
