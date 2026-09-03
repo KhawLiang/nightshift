@@ -72,8 +72,15 @@ written when the focus moves or every 30s, not on every poll).
 Anything written since then makes the session **unread**, and an idle session
 with unread output says so on its desk plate, in the rail and in the header
 count, in blue instead of green. The session whose pane you have
-focused right now says **viewing** instead, in white, with a soft glow and a
-faint reticle on its desk - that one is you. Busy sessions say `working` rather
+focused right now says **viewing** instead, with a soft glow and a faint reticle
+on its desk - that one is you. It is white while you are at the terminal and
+blue once it has something you have not read.
+
+That last part needs one more signal: herdr still calls a pane focused while you
+are off looking at the browser, so the page tells the server whether it has focus
+itself (`/api/sessions?here=1`). While you are reading nightshift you are not
+reading that pane, so it stops counting as read and can turn blue like any
+other - which is the whole point of watching a session finish from here. Busy sessions say `working` rather
 than the registry's `busy`; a session actively typing is not something you are
 behind on.
 

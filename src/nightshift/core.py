@@ -194,7 +194,9 @@ def where(tmux):
     return "%s:%s.%s" % (sess, win, pidx) if multi else "%s:%s" % (sess, win)
 
 
-def collect():
+def collect(at_terminal=True):
+    """`at_terminal` is false when the browser itself has focus: you are looking at
+    nightshift, not at the pane herdr calls focused, so that pane can go unread."""
     rows = []
     for f in glob.glob(os.path.join(SESS, "*.json")):
         try:
@@ -251,7 +253,7 @@ def collect():
     watching = herdr.current()[1] if herdr.available() else ""
     for r in rows:
         r["watching"] = bool(watching) and r["sid"] == watching
-    if watching:
+    if watching and at_terminal:                 # only counts if you are actually there
         for r in rows:
             if r["watching"]:
                 r["unread"] = False

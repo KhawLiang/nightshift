@@ -54,7 +54,9 @@ class Handler(TalkRoutes, BaseHTTPRequestHandler):
                 return self._send(500, "cannot read %s: %s" % (PAGE, e), "text/plain")
         if path == "/api/sessions":              # desks, plus the full roster
             import time
-            rows = collect()
+            # `here=1` means this browser window has focus, so you are looking at
+            # nightshift rather than at the pane herdr calls focused
+            rows = collect(at_terminal=q.get("here") != "1")
             # `sessions` are the desks; `all` also carries the background agents,
             # which have no desk but still show up in the workspace rail.
             return self._json(200, {"now": int(time.time() * 1000),

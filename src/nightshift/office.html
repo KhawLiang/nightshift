@@ -1284,7 +1284,7 @@ function stateLabel(a){
   return a.state === "busy" ? "working" : a.state;
 }
 function labelColor(a){
-  if (a.watching) return C.viewing;
+  if (a.watching) return a.unread ? C.unread : C.viewing;   // yours, with something new
   return (a.unread && (a.state === "idle" || a.state === "unknown"))
     ? C.unread : stateColor(a.state);
 }
@@ -1356,7 +1356,10 @@ async function focusPane(a){
 const beat = document.getElementById("beat");
 async function poll(){
   try {
-    const r = await fetch("/api/sessions", {cache:"no-store"});
+    // tell the server whether you are here in the browser: if you are, the pane
+    // herdr calls focused is one you are *not* reading right now
+    const r = await fetch("/api/sessions?here=" + (document.hasFocus() ? 1 : 0),
+                          {cache:"no-store"});
     const j = await r.json();
     sessions = j.sessions || [];
     roster = j.all || sessions;                       // older servers send desks only
