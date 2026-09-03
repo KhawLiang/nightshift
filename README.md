@@ -73,7 +73,8 @@ Anything written since then makes the session **unread**, and an idle session
 with unread output says so on its desk plate, in the rail and in the header
 count, in blue instead of green. The session whose pane you have
 focused right now says **viewing** instead, in white, with a soft glow and a
-faint reticle on its desk - that one is you. Busy sessions say `working` rather
+faint reticle on its desk, and its row in the rail is highlighted with a white
+bar - that one is you. Busy sessions say `working` rather
 than the registry's `busy`; a session actively typing is not something you are
 behind on.
 

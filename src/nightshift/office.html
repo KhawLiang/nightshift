@@ -95,6 +95,12 @@
   }
   .row:hover { background:rgba(241,238,230,.07); }
   .row.on { background:rgba(241,238,230,.1); }
+  .row.here {                                   /* the pane you are sitting in */
+    background:rgba(241,238,230,.1);
+    box-shadow:inset 2px 0 0 var(--text);
+  }
+  .row.here .rn { color:var(--text); font-weight:700; }
+  #nav.compact .row.here .dot { box-shadow:0 0 0 2px rgba(241,238,230,.6); }
   .row .txt { min-width:0; flex:1 1 auto; }
   .row .rn { font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .row .rn .pre { color:var(--dim); }           /* the part the folder already told you */
@@ -1415,7 +1421,8 @@ function wsGroups(){
 function drawNav(){
   const groups = wsGroups();
   const key = groups.map(g=> g.path + ":" + (bgOpen[g.path] ? "+" : "") + g.list.map(a=>
-    a.name+a.state+a.quiet_str+a.kind+(a.sid===lastRead?"*":"")).join(",")).join("|");
+    a.name+a.state+a.quiet_str+a.kind+(a.watching?"@":"")+(a.sid===lastRead?"*":"")
+  ).join(",")).join("|");
   if (key === navCache) return;
   navCache = key;
   nav.innerHTML = "";
@@ -1446,7 +1453,8 @@ function drawNav(){
       const col = stateColor(a.state), bg = a.kind === "bg";
       const nm = splitName(a.name, home ? "" : leaf);
       const row = document.createElement("div");
-      row.className = "row" + (a.sid && a.sid === lastRead ? " on" : "");
+      row.className = "row" + (a.sid && a.sid === lastRead ? " on" : "")
+                            + (a.watching ? " here" : "");
       row.title = a.name + " \u2014 " + stateLabel(a);
       const rc = labelColor(a);
       row.innerHTML = '<i class="dot'+(bg?" bg":"")+'" style="background:'+rc+';color:'+rc+'"></i>'
