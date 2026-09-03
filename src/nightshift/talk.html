@@ -54,8 +54,7 @@ aside{background:var(--panel);border-right:1px solid var(--line);
 .dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
 .s.busy{color:var(--busy)} .s.idle{color:var(--idle)} .s.waiting{color:var(--waiting)}
 .s.draft{color:var(--draft)} .s.unknown{color:var(--unknown)} .s.ended{color:var(--ended)}
-.s.unread{color:var(--unread)} .s.viewing{color:var(--tx)}
-.s.viewing.new{color:var(--unread)} .s .rs{color:inherit}
+.s.unread{color:var(--unread)} .s.viewing{color:var(--tx)} .s .rs{color:inherit}
 .s.ended{opacity:.72} .s.ended:hover,.s.ended.on{opacity:1}
 .s .nm{font:11px var(--mono);color:var(--tx);flex:1;min-width:0;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
@@ -333,8 +332,6 @@ function renderList(){
       const el = document.createElement("div");
       const lbl = stateLabel(s);
       el.className = "s " + (lbl === "unread" || lbl === "viewing" ? lbl : s.state) +
-                     (lbl === "viewing" && (s.state === "idle" || s.state === "unknown")
-                        ? " new" : "") +
                      (s.sid === S.sid ? " on" : "");
       el.title = [s.name, s.title, s.cwd].filter(Boolean).join("\n");
       const sub = s.title && s.title !== s.name ? s.title : "";
