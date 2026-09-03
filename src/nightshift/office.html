@@ -19,29 +19,105 @@
   }
 
   header {
-    flex:0 0 auto; display:flex; align-items:center; gap:1rem;
-    padding:.55rem .9rem; border-bottom:1px solid var(--line); background:var(--panel);
+    flex:0 0 auto; display:flex; align-items:center; gap:.9rem;
+    padding:.5rem .9rem; border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, #201d19, var(--panel));
   }
-  .brand { font-weight:700; letter-spacing:.04em; }
-  .counts { display:flex; gap:.85rem; margin-left:auto; align-items:center; }
-  .cnt { display:flex; align-items:center; gap:.35rem; color:var(--dim); }
-  .cnt b { color:var(--text); font-variant-numeric:tabular-nums; }
-  .swatch { width:8px; height:8px; border-radius:2px; display:inline-block; }
-  #fs {
+  .brand { display:flex; align-items:center; gap:.45rem; font-weight:700;
+           letter-spacing:.05em; flex:0 0 auto; }
+  .brand .mark { width:9px; height:9px; border-radius:2px; background:var(--idle);
+                 box-shadow:0 0 9px currentColor; transition:background .3s; }
+  #hint { font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .counts { display:flex; gap:.4rem; margin-left:auto; align-items:center; flex:0 0 auto; }
+  .cnt {
+    display:flex; align-items:center; gap:.35rem; color:var(--dim); font-size:11px;
+    background:rgba(241,238,230,.045); border:1px solid var(--line);
+    border-radius:999px; padding:.12rem .5rem;
+  }
+  .cnt b { color:var(--text); font-variant-numeric:tabular-nums; font-weight:700; }
+  .cnt.need { border-color:currentColor; }
+  .cnt.need b { color:currentColor; }
+  .swatch { width:7px; height:7px; border-radius:50%; display:inline-block; }
+  .lnk {
+    display:flex; align-items:center; gap:.3rem; height:24px; padding:0 .55rem;
+    border:1px solid var(--line); border-radius:6px; color:var(--dim);
+    font-size:11px; text-decoration:none; letter-spacing:.02em;
+    transition:color .12s, border-color .12s, background .12s;
+  }
+  .lnk:hover { color:var(--text); border-color:#4a443c; background:rgba(241,238,230,.06); }
+  #fs, #nv {
+    display:flex; align-items:center; justify-content:center; width:26px; height:24px;
     background:transparent; border:1px solid var(--line); color:var(--dim);
-    border-radius:4px; padding:.15rem .4rem; font:inherit; font-size:12px; cursor:pointer;
+    border-radius:6px; padding:0; font:inherit; font-size:12px; cursor:pointer;
+    transition:color .12s, border-color .12s, background .12s;
   }
-  #fs:hover { color:var(--text); border-color:var(--dim); }
+  #fs:hover, #nv:hover { color:var(--text); border-color:#4a443c;
+                         background:rgba(241,238,230,.06); }
   .beat { width:7px; height:7px; border-radius:50%; background:var(--idle);
           opacity:.25; transition:opacity .15s; }
   .beat.on { opacity:1; }
 
-  #stage { flex:1 1 auto; position:relative; display:flex;
+  #main { flex:1 1 auto; display:flex; min-height:0; }
+  #stage { flex:1 1 auto; position:relative; display:flex; min-width:0;
            align-items:center; justify-content:center; padding:14px; min-height:0; }
+
+  /* ---------- workspace rail ---------- */
+  #nav {
+    flex:0 0 auto; width:216px; overflow-y:auto; overflow-x:hidden;
+    background:var(--panel); border-right:1px solid var(--line);
+    padding:.5rem .35rem .8rem; transition:width .16s;
+  }
+  #nav.compact { width:44px; padding:.5rem .25rem .8rem; }
+  #nav::-webkit-scrollbar { width:6px; }
+  #nav::-webkit-scrollbar-thumb { background:rgba(241,238,230,.14); border-radius:3px; }
+  .ws {
+    background:rgba(241,238,230,.045); border-radius:6px;
+    border-left:3px solid var(--unk);            /* the group's worst state */
+    padding:.3rem .4rem .32rem; margin-bottom:.5rem;
+  }
+  .ws .wh { padding:0 .1rem .18rem; }
+  .ws .wh .wp { font-size:9px; color:var(--dim); overflow:hidden;
+                text-overflow:ellipsis; white-space:nowrap; }
+  .ws .wh .wtop { display:flex; align-items:center; gap:.35rem; }
+  .ws .wh .wn { font-size:11px; font-weight:700; color:var(--text); min-width:0;
+                overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ws .wh .wc {
+    margin-left:auto; display:flex; align-items:center; gap:.25rem; flex:0 0 auto;
+    background:rgba(241,238,230,.1); border-radius:8px; padding:0 5px;
+    font-size:9px; color:var(--dim); font-variant-numeric:tabular-nums;
+  }
+  .ws .row { margin-left:.1rem; }
+  .dot { width:7px; height:7px; border-radius:50%; flex:0 0 auto; }
+  .dot.bg { background:transparent !important; box-shadow:inset 0 0 0 2px currentColor; }
+  .row {
+    display:flex; align-items:center; gap:.4rem; padding:.22rem .35rem;
+    border-radius:4px; cursor:pointer; line-height:1.25;
+  }
+  .row:hover { background:rgba(241,238,230,.07); }
+  .row.on { background:rgba(241,238,230,.1); }
+  .row .txt { min-width:0; flex:1 1 auto; }
+  .row .rn { font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row .rn .pre { color:var(--dim); }           /* the part the folder already told you */
+  .row .rs { font-size:9px; color:var(--dim); overflow:hidden;
+             text-overflow:ellipsis; white-space:nowrap; }
+  .row .tag { font-size:8px; color:var(--dim); border:1px solid var(--line);
+              border-radius:3px; padding:0 3px; letter-spacing:.06em; }
+  .row .go { flex:0 0 auto; font-size:11px; color:var(--dim); opacity:0; padding:0 2px; }
+  .row:hover .go { opacity:1; }
+  .row .go:hover { color:var(--text); }
+  #nav.compact .ws { padding:.28rem 0; margin-bottom:.4rem; }
+  #nav.compact .wh,
+  #nav.compact .row .txt, #nav.compact .row .go { display:none; }
+  #nav.compact .row { justify-content:center; padding:.25rem 0; margin-left:0; }
+  #nav .none { color:var(--dim); font-size:10px; padding:.3rem .35rem; }
+  #nav.compact .none { display:none; }
   #frame { position:relative; }
   canvas { display:block; image-rendering:pixelated; image-rendering:crisp-edges;
            border-radius:5px; box-shadow:0 14px 46px rgba(0,0,0,.6); }
   #overlay { position:absolute; inset:0; pointer-events:none; }
+
+  .person { position:absolute; transform:translate(-50%,-50%);
+            pointer-events:auto; cursor:pointer; }
 
   .plate {
     position:absolute; transform:translate(-50%,0); white-space:nowrap;
@@ -99,20 +175,24 @@
 <body>
 
 <header>
-  <span class="brand">nightshift</span>
-  <span style="color:var(--dim)" id="hint">click a desk to focus that pane &middot; shift-click to read it</span>
+  <span class="brand"><i class="mark" id="mark"></i>nightshift</span>
+  <span style="color:var(--dim)" id="hint">click a person to focus that pane &middot; click a desk to read the conversation</span>
   <span class="counts" id="counts"></span>
-  <button id="rd" title="read the conversations (r)">read</button>
+  <a class="lnk" id="talk" href="/talk" title="read and reply to any session (r)">talk &rarr;</a>
+  <button id="nv" title="workspaces (n)">&#9776;</button>
   <button id="fs" title="fullscreen (f)">&#9974;</button>
   <span class="beat" id="beat"></span>
 </header>
 
-<div id="stage">
-  <div id="frame">
-    <canvas id="cv"></canvas>
-    <div id="overlay"></div>
+<div id="main">
+  <aside id="nav"></aside>
+  <div id="stage">
+    <div id="frame">
+      <canvas id="cv"></canvas>
+      <div id="overlay"></div>
+    </div>
+    <div id="empty">nobody's in the office &mdash; no Claude Code sessions running</div>
   </div>
-  <div id="empty">nobody's in the office &mdash; no Claude Code sessions running</div>
 </div>
 
 <div id="tip"></div>
@@ -179,6 +259,9 @@ function stateColor(s){ return s==="busy"?C.busy:s==="idle"?C.idle:s==="waiting"
 
 /* ---------- live model ---------- */
 let sessions = [];
+let roster = [];                                        // desks + background agents
+let lastRead = "";
+let hoverName = "";                                     /* the character under the cursor */
 let rooms = [];
 let lastT = 0;
 
@@ -931,6 +1014,13 @@ function drawStation(dx,dy,a,t){
   pool.addColorStop(0, col + "3a"); pool.addColorStop(.55, col + "18"); pool.addColorStop(1, col + "00");
   ctx.fillStyle = pool; ctx.fillRect(dx-30, dy+40, DW+60, 112);
 
+  const lit = hoverName === a.name;
+  if (lit) {                                                  // hover: light them up
+    const h = ctx.createRadialGradient(cx, dy+26, 8, cx, dy+26, 82);
+    h.addColorStop(0, col + "3d"); h.addColorStop(.6, col + "16"); h.addColorStop(1, col + "00");
+    ctx.fillStyle = h; ctx.fillRect(dx-20, dy-60, DW+40, 150);
+  }
+
   /* --- desk --- */
   alphaBlock(dx+4, dy+52, DW-8, 8, "#000000", .18);
   px(dx, dy, DW, 10, C.deskTop); px(dx, dy, DW, 3, C.deskHi);
@@ -1081,6 +1171,16 @@ function drawStation(dx,dy,a,t){
     g.addColorStop(0, col + "26"); g.addColorStop(1, col + "00");
     ctx.fillStyle = g; ctx.fillRect(dx-24, dy-104, DW+48, 150);
   }
+  if (lit) {                                    // a pixel reticle around the one you'd read
+    const x0 = dx+32, y0 = dy-18, bw = 86, bh = 96, L = 10, T = 2;
+    ctx.fillStyle = col;
+    [[x0, y0, 1, 1], [x0+bw, y0, -1, 1], [x0, y0+bh, 1, -1], [x0+bw, y0+bh, -1, -1]]
+      .forEach(([bx, by, sx2, sy2])=>{
+        ctx.fillRect(sx2 > 0 ? bx : bx-L, sy2 > 0 ? by : by-T, L, T);
+        ctx.fillRect(sx2 > 0 ? bx : bx-T, sy2 > 0 ? by : by-L, T, L);
+      });
+  }
+
   if (gone) ctx.globalAlpha = 1;
 }
 
@@ -1098,6 +1198,7 @@ function draw(t){
     drawRoom(r, t);
     for (const seat of r.seats)
       hits.push({ a: seat.s, x: seat.x + DW/2, y: seat.y - 30,
+                  body:  { x: seat.x + DW/2, y: seat.y + 31, w: 86, h: 92 },
                   label: { x: seat.x + DW/2, y: seat.y + 112 } });
   }
 
@@ -1129,6 +1230,17 @@ function layout(hits, scale){
   }
   for (const h of hits) {
     const a = h.a, col = stateColor(a.state);
+    const b = document.createElement("div");            // the character itself: read
+    b.className = "person"; b.title = "focus " + a.name + "'s pane";
+    b.style.left   = (h.body.x/W*100) + "%";
+    b.style.top    = (h.body.y/H*100) + "%";
+    b.style.width  = (h.body.w/W*100) + "%";
+    b.style.height = (h.body.h/H*100) + "%";
+    b.addEventListener("click", ()=> focusPane(a));
+    // the glow is the whole hover story here - the panel would just cover the room
+    b.addEventListener("mouseenter", ()=>{ hoverName = a.name; hideTip(); });
+    b.addEventListener("mouseleave", ()=>{ hoverName = ""; });
+    overlay.appendChild(b);
     const p = document.createElement("div");
     p.className = "plate"; p.dataset.name = a.name;
     p.style.left = (h.label.x/W*100) + "%";
@@ -1136,12 +1248,20 @@ function layout(hits, scale){
     const spot = (a.where && a.where !== "-") ? (a.where.split(":")[1] || a.where) : a.name;
     p.innerHTML = '<div class="nm" style="color:'+col+'">'+esc(a.state)+'</div>'
                 + '<div class="sub">'+esc(spot)+' &middot; '+esc(a.quiet_str)+'</div>';
-    p.addEventListener("click", e=> (e.shiftKey||e.metaKey||e.altKey) ? openRead(a) : focusPane(a));
+    p.addEventListener("click", e=> (e.shiftKey||e.altKey) ? focusPane(a)
+                                 : openTalk(a, e.metaKey || e.ctrlKey));
     p.addEventListener("mouseenter", e=>showTip(e,a));
     p.addEventListener("mousemove", e=>moveTip(e));
     p.addEventListener("mouseleave", hideTip);
     overlay.appendChild(p);
   }
+}
+/* an agent under ~/.../f168-loop-agent is usually named f168-loop-agent-9f:
+   dim the half the folder already told you, keep the rest bright */
+function splitName(name, leaf){
+  const n = String(name).toLowerCase(), l = String(leaf).toLowerCase();
+  if (!leaf || n === l || !n.startsWith(l)) return ["", name];
+  return [name.slice(0, leaf.length), name.slice(leaf.length)];
 }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
@@ -1152,8 +1272,7 @@ function showTip(e,a){
     + '<div><span class="k">cwd   </span>'+esc(a.cwd)+'</div>'
     + '<div><span class="k">up '+esc(a.age)+' &middot; quiet '+esc(a.quiet_str)+'</span></div>'
     + (a.draft ? '<span class="snip" style="color:'+C.draft+'">unsent: '+esc(a.draft)+'</span>'
-               : (a.snip ? '<span class="snip">'+esc(a.snip)+'</span>' : ''))
-    + '<div class="k" style="margin-top:6px">click focus &middot; shift-click read</div>';
+               : (a.snip ? '<span class="snip">'+esc(a.snip)+'</span>' : ''));
   tip.style.display = "block"; moveTip(e);
 }
 function moveTip(e){
@@ -1173,9 +1292,17 @@ function toast(msg){
   clearTimeout(toastT); toastT = setTimeout(()=>el.classList.remove("on"), 2200);
 }
 
-/* the transcript lives on the same server, at /read */
-function openRead(a){
-  window.open("/read" + (a && a.sid ? "?sid=" + a.sid : ""), "_blank");
+/* the transcript lives on the same server, at /talk - same tab, so talk's
+   "office" link takes you straight back; cmd/ctrl-click still opens a tab */
+function openTalk(a, newTab){
+  const url = "/talk" + (a && a.sid ? "?sid=" + a.sid : "");
+  if (newTab) {
+    lastRead = a && a.sid ? a.sid : lastRead;
+    window.open(url, "nightshift-talk");
+    navCache = ""; drawNav();                     // move the rail highlight
+    return;
+  }
+  location.href = url;
 }
 
 async function focusPane(a){
@@ -1200,7 +1327,9 @@ async function poll(){
     const r = await fetch("/api/sessions", {cache:"no-store"});
     const j = await r.json();
     sessions = j.sessions || [];
+    roster = j.all || sessions;                       // older servers send desks only
     buildRooms(sessions);
+    drawNav();
     document.getElementById("empty").style.display = sessions.length ? "none" : "flex";
     frame.style.display = sessions.length ? "block" : "none";
     counts();
@@ -1210,24 +1339,111 @@ async function poll(){
 function counts(){
   const n = {}; for (const s of sessions) n[s.state] = (n[s.state]||0)+1;
   const need = (n.waiting||0)+(n.draft||0)+(n.idle||0);
-  const row = [["busy",C.busy],["idle",C.idle],["draft",C.draft],["waiting",C.wait]]
+  const row = [["waiting",C.wait],["draft",C.draft],["idle",C.idle],["busy",C.busy]]
     .filter(([k])=>n[k])
     .map(([k,c])=>'<span class="cnt"><i class="swatch" style="background:'+c+'"></i><b>'+n[k]+'</b> '+k+'</span>')
     .join("");
-  document.getElementById("counts").innerHTML =
-    row + '<span class="cnt"><b>'+need+'</b> need you</span>';
+  const worst = n.waiting ? C.wait : n.draft ? C.draft : n.idle ? C.idle
+              : n.busy ? C.busy : C.unk;                 // what the room needs first
+  document.getElementById("counts").innerHTML = row +
+    (need ? '<span class="cnt need" style="color:'+worst+'"><b>'+need+'</b> need you</span>' : "");
+  document.getElementById("mark").style.background = sessions.length ? worst : C.unk;
 }
+
+/* ---------- the workspace rail: every running agent, grouped by cwd ---------- */
+const nav = document.getElementById("nav");
+let navCache = "";
+function wsGroups(){
+  const by = new Map();
+  for (const s of roster) {
+    const k = s.cwd || "?";
+    if (!by.has(k)) by.set(k, []);
+    by.get(k).push(s);
+  }
+  const urg = a => URG[a.state] === undefined ? 4 : URG[a.state];
+  const out = [...by.entries()].map(([path, list])=>{
+    list.sort((a,b)=> urg(a) - urg(b) || (a.name < b.name ? -1 : 1));
+    return { path, list, worst: Math.min(...list.map(urg)) };
+  });
+  out.sort((a,b)=> a.worst - b.worst || (a.path < b.path ? -1 : 1));
+  return out;
+}
+function drawNav(){
+  const groups = wsGroups();
+  const key = groups.map(g=> g.path + ":" + g.list.map(a=>
+    a.name+a.state+a.quiet_str+a.kind+(a.sid===lastRead?"*":"")).join(",")).join("|");
+  if (key === navCache) return;
+  navCache = key;
+  nav.innerHTML = "";
+  if (!groups.length) {
+    const n = document.createElement("div");
+    n.className = "none"; n.textContent = "no sessions";
+    return nav.appendChild(n);
+  }
+  for (const g of groups) {
+    const box = document.createElement("div");
+    box.className = "ws"; box.title = g.path;
+    const worstCol = stateColor(Object.keys(URG).find(k=>URG[k]===g.worst) || "unknown");
+    box.style.borderLeftColor = worstCol;
+    const parts = g.path.split("/").filter(Boolean);
+    const home = g.path === "~";                       // a bare ~ reads as nothing
+    const leaf = home ? "home" : (parts.pop() || g.path);
+    const parent = home ? "~" : (parts.length ? parts.join("/") + "/" : "");
+    const head = document.createElement("div");
+    head.className = "wh";
+    head.innerHTML = (parent ? '<div class="wp">'+esc(parent)+'</div>' : '')
+                   + '<div class="wtop"><span class="wn">'+esc(leaf)+'</span>'
+                   + '<span class="wc"><i class="dot" style="background:'+worstCol+'"></i>'
+                   + g.list.length+'</span></div>';
+    box.appendChild(head);
+    for (const a of g.list) {
+      const col = stateColor(a.state), bg = a.kind === "bg";
+      const nm = splitName(a.name, home ? "" : leaf);
+      const row = document.createElement("div");
+      row.className = "row" + (a.sid && a.sid === lastRead ? " on" : "");
+      row.title = a.name + " \u2014 " + a.state;
+      row.innerHTML = '<i class="dot'+(bg?" bg":"")+'" style="background:'+col+';color:'+col+'"></i>'
+                    + '<div class="txt"><div class="rn">'
+                    + (nm[0] ? '<span class="pre">'+esc(nm[0])+'</span>' : '')
+                    + esc(nm[1])+'</div>'
+                    + '<div class="rs">'+esc(a.state)+' &middot; '+esc(a.quiet_str)
+                    + (bg ? ' <span class="tag">bg</span>' : '')+'</div></div>';
+      if (a.pane) {                                    // bg agents share a pane, so no jump
+        const go = document.createElement("span");
+        go.className = "go"; go.textContent = "\u25b8"; go.title = "focus " + a.where;
+        go.addEventListener("click", e=>{ e.stopPropagation(); focusPane(a); });
+        row.appendChild(go);
+      }
+      row.addEventListener("click", e=> (e.shiftKey||e.altKey) ? focusPane(a)
+                                      : openTalk(a, e.metaKey || e.ctrlKey));
+      row.addEventListener("mouseenter", e=>{ hoverName = a.name; showTip(e,a); });
+      row.addEventListener("mousemove", e=>moveTip(e));
+      row.addEventListener("mouseleave", ()=>{ hoverName = ""; hideTip(); });
+      box.appendChild(row);
+    }
+    nav.appendChild(box);
+  }
+}
+function setNav(mode){
+  nav.classList.toggle("compact", mode === "compact");
+  try { localStorage.setItem("nightshift.nav", mode); } catch (e) {}
+  setTimeout(()=>{ plateCache=""; buildRooms(sessions); }, 190);   // the floor refits
+}
+function toggleNav(){ setNav(nav.classList.contains("compact") ? "full" : "compact"); }
+try { if (localStorage.getItem("nightshift.nav") === "compact") nav.classList.add("compact"); }
+catch (e) {}
+document.getElementById("nv").addEventListener("click", toggleNav);
 
 function toggleFull(){
   if (document.fullscreenElement) document.exitFullscreen();
   else document.documentElement.requestFullscreen().catch(()=>{});
 }
 document.getElementById("fs").addEventListener("click", toggleFull);
-document.getElementById("rd").addEventListener("click", ()=>openRead(null));
 addEventListener("keydown", e=>{
   if (e.metaKey || e.ctrlKey) return;
   if (e.key === "f") toggleFull();
-  if (e.key === "r") openRead(null);
+  if (e.key === "r") openTalk(null);
+  if (e.key === "n") toggleNav();
 });
 addEventListener("resize", ()=>{ plateCache=""; buildRooms(sessions); });
 addEventListener("fullscreenchange", ()=>{ plateCache=""; setTimeout(()=>buildRooms(sessions), 60); });

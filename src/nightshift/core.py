@@ -217,6 +217,88 @@ def interactive(rows):
     return [r for r in rows if r.get("kind") == "interactive"]
 
 
+KEYS = {                                   # the only key presses we will ever send
+    "esc":    ("esc",    "Escape"),        # herdr name, tmux name
+    "ctrl-c": ("ctrl+c", "C-c"),           # herdr spells this one with a plus
+    "up":     ("up",     "Up"),
+    "enter":  ("enter",  "Enter"),
+}
+TEXT_CAP = 8192
+
+
+def _live_pane(pane):
+    """The row for a pane we are tracking right now, or None. Same gate as focus."""
+    shaped = isinstance(pane, str) and (PANE_RE.match(pane) or
+                                        (herdr.available() and herdr.ID_RE.match(pane)))
+    if not shaped:
+        return None
+    return {s["pane"]: s for s in collect() if s["pane"]}.get(pane)
+
+
+def send_pane(pane, text="", submit=True):
+    """Type `text` into a pane, optionally pressing Enter. '' on success, else why not.
+
+    The counterpart to focus_pane: same narrow gate (a pane id we are tracking),
+    and the text is always one argv item - never a shell string.
+    """
+    row = _live_pane(pane)
+    if row is None:
+        return "unknown pane"
+    text = (text or "")[:TEXT_CAP]
+    if not text and not submit:
+        return ""
+    if row["mux"] == "herdr":
+        return herdr.send(pane, text, ["enter"] if submit else [])
+    try:
+        if text:
+            # a buffer + bracketed paste, so a multi-line message stays one prompt
+            subprocess.run(["tmux", "set-buffer", "-b", "nightshift", "--", text],
+                           capture_output=True, timeout=2, check=True)
+            subprocess.run(["tmux", "paste-buffer", "-b", "nightshift", "-d", "-p",
+                            "-t", pane], capture_output=True, timeout=2, check=True)
+        if submit:
+            subprocess.run(["tmux", "send-keys", "-t", pane, "Enter"],
+                           capture_output=True, timeout=2, check=True)
+    except Exception as e:
+        return str(e)
+    return ""
+
+
+def send_key(pane, key):
+    """Press one key from KEYS in a pane. '' on success, else why not."""
+    if key not in KEYS:
+        return "key not allowed"
+    row = _live_pane(pane)
+    if row is None:
+        return "unknown pane"
+    hk, tk = KEYS[key]
+    if row["mux"] == "herdr":
+        return herdr.send(pane, "", [hk])
+    try:
+        subprocess.run(["tmux", "send-keys", "-t", pane, tk],
+                       capture_output=True, timeout=2, check=True)
+    except Exception as e:
+        return str(e)
+    return ""
+
+
+def screen_of(pane, lines=14):
+    """What that pane is showing right now, as plain text ('' if we cannot look)."""
+    row = _live_pane(pane)
+    if row is None:
+        return ""
+    if row["mux"] == "herdr":
+        out = herdr.read(pane, lines)
+    else:
+        out = _tmux("capture-pane", "-p", "-t", pane, "-S", "-%d" % lines)
+    rows = [r.rstrip() for r in (out or "").splitlines()]
+    while rows and not rows[0]:                 # a pane is mostly empty space
+        rows.pop(0)
+    while rows and not rows[-1]:
+        rows.pop()
+    return "\n".join(rows[-lines:])
+
+
 def focus_pane(pane):
     """Jump the terminal to a pane. Returns '' on success, else why not.
 

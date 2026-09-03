@@ -14,12 +14,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 from .core import collect, focus_pane, interactive
-from .read import ReaderRoutes
+from .talk import TalkRoutes
 
 PAGE = os.path.join(HERE, "office.html")
 
 
-class Handler(ReaderRoutes, BaseHTTPRequestHandler):
+class Handler(TalkRoutes, BaseHTTPRequestHandler):
     server_version = "nightshift"
 
     def log_message(self, *a):
@@ -44,7 +44,7 @@ class Handler(ReaderRoutes, BaseHTTPRequestHandler):
     def do_GET(self):
         path, _, query = self.path.partition("?")
         q = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
-        if self.reader_get(path, q):             # /read and /api/read/*
+        if self.talk_get(path, q):               # /talk, /read and /api/*
             return
         if path == "/":
             try:
@@ -52,18 +52,25 @@ class Handler(ReaderRoutes, BaseHTTPRequestHandler):
                     return self._send(200, f.read(), "text/html; charset=utf-8")
             except OSError as e:
                 return self._send(500, "cannot read %s: %s" % (PAGE, e), "text/plain")
-        if path == "/api/sessions":              # the office: desks only
+        if path == "/api/sessions":              # desks, plus the full roster
             import time
+            rows = collect()
+            # `sessions` are the desks; `all` also carries the background agents,
+            # which have no desk but still show up in the workspace rail.
             return self._json(200, {"now": int(time.time() * 1000),
-                                    "sessions": interactive(collect())})
+                                    "sessions": interactive(rows), "all": rows})
         return self._send(404, "not found", "text/plain")
 
     def do_POST(self):
-        if self.path.split("?")[0] != "/api/focus":
+        path = self.path.split("?")[0]
+        n = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(min(n, 11 * 1024 * 1024)) if n else b""
+        if self.talk_post(path, raw, self.headers.get("Content-Type", "")):
+            return                               # /api/talk/send and /api/talk/upload
+        if path != "/api/focus":
             return self._send(404, "not found", "text/plain")
         try:
-            n = int(self.headers.get("Content-Length") or 0)
-            body = json.loads(self.rfile.read(min(n, 4096)) or b"{}")
+            body = json.loads(raw or b"{}")
         except Exception:
             return self._json(400, {"error": "bad body"})
         pane = body.get("pane") or ""

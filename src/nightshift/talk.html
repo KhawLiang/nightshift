@@ -1,0 +1,764 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>nightshift talk</title>
+<style>
+:root{
+  --bg:#0a0e14; --panel:#0e141c; --panel2:#121a24; --line:#1c2733;
+  --tx:#d6dee9; --dim:#8b95a1; --dimmer:#5d6773;
+  --busy:#ffb020; --idle:#3ddc97; --waiting:#ff4757; --draft:#c77dff;
+  --unknown:#8b95a1; --ended:#4a5563; --you:#57b6ff;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.6 var(--sans);
+  display:grid;grid-template-columns:216px 1fr;grid-template-rows:100%;
+  height:100vh;overflow:hidden}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#1f2a36;border-radius:9px}
+::-webkit-scrollbar-thumb:hover{background:#2c3a49}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- sidebar ---------- */
+aside{background:var(--panel);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0}
+.brand{padding:10px 11px 8px;border-bottom:1px solid var(--line)}
+.brand .back{display:none;font:9px var(--mono);letter-spacing:.12em;text-transform:uppercase;
+  color:var(--dim);text-decoration:none;margin-bottom:5px}
+.brand .back:hover{color:var(--tx)}
+.brand h1{margin:0;font:700 12px/1.2 var(--mono);letter-spacing:.1em;
+  text-transform:uppercase;color:var(--tx)}
+.brand p{margin:4px 0 0;font-size:10px;color:var(--dimmer)}
+.search{padding:7px 8px;border-bottom:1px solid var(--line)}
+.search input{width:100%;padding:5px 8px;border-radius:6px;border:1px solid var(--line);
+  background:var(--bg);color:var(--tx);font:11px var(--mono);outline:none}
+.search input:focus{border-color:#2e3d4d}
+.list{overflow-y:auto;flex:1;padding:5px 0 16px}
+.group{padding:11px 10px 4px}
+.group .wp{font:9px var(--mono);color:var(--dimmer);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.group .wt{display:flex;gap:7px;align-items:center;margin-top:1px}
+.group .wn{font:700 11px var(--mono);color:var(--tx);flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.group .n{background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+  padding:0 5px;font:9px var(--mono);color:var(--dim);flex:none}
+.s{margin:4px 7px;padding:5px 7px 5px 8px;border-radius:6px;cursor:pointer;
+  background:var(--panel2);border:1px solid var(--line);
+  border-left:3px solid currentColor;transition:background .12s,border-color .12s}
+.s:hover{background:#16202c;border-color:#2b3a49;border-left-color:currentColor}
+.s.on{background:#16202c;box-shadow:0 0 0 1px #2f4053 inset}
+.s .top{display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.s.busy{color:var(--busy)} .s.idle{color:var(--idle)} .s.waiting{color:var(--waiting)}
+.s.draft{color:var(--draft)} .s.unknown{color:var(--unknown)} .s.ended{color:var(--ended)}
+.s.ended{opacity:.72} .s.ended:hover,.s.ended.on{opacity:1}
+.s .nm{font:11px var(--mono);color:var(--tx);flex:1;min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.s .ti{font-size:9px;color:var(--dim);margin-top:1px;padding-left:13px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.s .q{font:9px var(--mono);color:var(--dimmer);flex:none}
+.s.busy .dot{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* ---------- main ---------- */
+main{display:flex;flex-direction:column;min-width:0;min-height:0}
+header{display:flex;align-items:center;gap:12px;padding:.5rem .9rem;
+  border-bottom:1px solid var(--line);background:var(--panel)}
+header .who{font:12px var(--mono);font-weight:700;color:var(--tx);flex:none}
+header .meta{font-size:11px;color:var(--dimmer);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+header .sp{flex:1}
+.badge{font:10px var(--mono);letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 7px;border-radius:5px;border:1px solid currentColor;opacity:.9;flex:none}
+button{display:flex;align-items:center;height:24px;font:11px var(--mono);color:var(--dim);
+  background:transparent;border:1px solid var(--line);border-radius:6px;padding:0 .55rem;
+  cursor:pointer;flex:none}
+button:hover{color:var(--tx);border-color:#31404f}
+button.on{color:var(--tx);border-color:#3a4b5c;background:var(--panel2)}
+
+.feed{flex:1;overflow-y:auto;padding:22px 0 40px}
+.wrap{max-width:1040px;margin:0 auto;padding:0 26px}
+.ev{margin:0 0 16px}
+.lbl{font:10px var(--mono);letter-spacing:.13em;text-transform:uppercase;
+  color:var(--dimmer);margin-bottom:5px}
+.body{white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere}
+
+.user{border-left:2px solid var(--you);padding:7px 12px 8px 13px;border-radius:0 8px 8px 0;
+  background:rgba(87,182,255,.06)}
+.user .lbl{color:var(--you);opacity:.75}
+.say{padding-left:16px}
+.cmd{font:12px var(--mono);color:var(--draft);padding-left:16px;opacity:.85}
+.note{font:11px var(--mono);color:var(--dimmer);padding-left:16px}
+
+body.no-think .think{display:none}
+body.no-tools .tool{display:none}
+
+/* thinking and tool calls fold the same way: a click on the head, or expand-all */
+.fold{margin-left:16px;border:1px solid var(--line);border-radius:8px;
+  background:var(--panel);overflow:hidden}
+.fold>.hd{display:flex;gap:9px;align-items:center;padding:7px 11px;cursor:pointer;
+  font:12px var(--mono)}
+.fold>.hd:hover{background:var(--panel2)}
+.fold>.hd .caret{color:var(--dimmer);width:9px;flex:none;transition:transform .12s}
+.fold.open>.hd .caret{transform:rotate(90deg)}
+.fold .nme{color:var(--busy);flex:none}
+.fold .sum{color:var(--dim);overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;flex:1}
+.fold .st{font-size:10px;color:var(--dimmer);flex:none}
+.fold .st.bad{color:var(--waiting)}
+.fold>.det{display:none;border-top:1px solid var(--line)}
+.fold.open>.det{display:block}
+.fold .sec{padding:9px 12px}
+.fold .sec+.sec{border-top:1px solid var(--line)}
+.fold .cap{font:10px var(--mono);letter-spacing:.11em;text-transform:uppercase;
+  color:var(--dimmer);margin-bottom:5px}
+body.open-all .fold>.det{display:block}
+body.open-all .fold>.hd .caret{transform:rotate(90deg)}
+
+.run{background:transparent;border-color:#1a2431}
+.run>.hd .nme{color:var(--dim)}
+.run>.hd .st{color:var(--dim)}
+.run>.det{padding:7px 8px;background:rgba(255,255,255,.012)}
+.run .fold{margin-left:0;margin-bottom:6px}
+.run .fold:last-child{margin-bottom:0}
+
+.think{border-style:dashed;border-color:#253141;background:transparent}
+.think .nme{color:var(--dim);font-style:italic}
+.think .det .body{font-size:13px;color:#8fa0b3;font-style:italic;padding:9px 12px}
+pre{margin:0;font:12px/1.55 var(--mono);white-space:pre-wrap;word-break:break-word;
+  overflow-wrap:anywhere;color:#b9c6d4;max-height:460px;overflow-y:auto}
+.say pre.code{background:var(--panel);border:1px solid var(--line);border-radius:7px;
+  padding:10px 12px;margin:9px 0;max-height:none}
+code{font:12.5px var(--mono);background:#141d27;border:1px solid var(--line);
+  border-radius:4px;padding:.5px 4px;color:#c2d0de}
+.say b{color:#fff;font-weight:600}
+.say .h{display:block;font-weight:600;color:#fff;margin:.7em 0 .1em}
+.say hr{border:0;border-top:1px solid var(--line);margin:1em 0}
+.say a{color:var(--you)}
+
+.side{opacity:.82;border-left:2px solid #2a3646;margin-left:6px;padding-left:10px}
+.tsep{display:flex;align-items:center;gap:11px;margin:26px 0 16px;
+  position:sticky;top:-22px;z-index:2;padding:6px 0;background:var(--bg);
+  font:10px var(--mono);letter-spacing:.13em;color:var(--dimmer)}
+.tsep::before,.tsep::after{content:"";height:1px;background:var(--line);flex:1}
+.more{display:block;margin:0 auto 22px}
+.empty{color:var(--dimmer);text-align:center;padding:70px 20px;font:12px var(--mono)}
+/* ---------- the pane's live screen, and the box you type into ---------- */
+.dock{border-top:1px solid var(--line);background:var(--panel);flex:none}
+.scr{border-bottom:1px solid var(--line);background:#080c11}
+.scr .cap{display:flex;align-items:center;gap:8px;padding:5px 14px;cursor:pointer;
+  font:10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--dimmer)}
+.scr .cap:hover{color:var(--dim)}
+.scr .cap .caret{transition:transform .12s}
+.scr.open .cap .caret{transform:rotate(90deg)}
+.scr pre{display:none;padding:0 14px 9px;max-height:190px;color:#9fb0c2;font-size:11.5px}
+.scr.open pre{display:block}
+.compose{padding:9px 14px 10px;display:flex;flex-direction:column;gap:7px}
+.compose.off{opacity:.5;pointer-events:none}
+.crow{display:flex;gap:8px;align-items:flex-end}
+.compose textarea{flex:1;resize:none;min-height:36px;max-height:190px;padding:8px 10px;
+  border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--tx);
+  font:13px/1.5 var(--sans);outline:none}
+.compose textarea:focus{border-color:#2e3d4d}
+.keys{display:flex;gap:5px;align-items:center}
+.keys button{padding:0 7px;height:26px;font:10px var(--mono)}
+#bSend{padding:0 13px;height:30px;font:12px var(--mono);color:var(--tx);border-color:#31404f}
+#bSend:hover{background:var(--panel2)}
+#bSend.warn{color:var(--waiting);border-color:var(--waiting)}
+.note2{font:10.5px var(--mono);color:var(--dimmer)}
+.note2.warn{color:var(--waiting)}
+.shots{display:flex;gap:7px;flex-wrap:wrap}
+.shot{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px;
+  border:1px solid var(--line);background:var(--panel2);font:10px var(--mono);color:var(--dim)}
+.shot img{width:26px;height:26px;object-fit:cover;border-radius:3px}
+.shot b{cursor:pointer;color:var(--dimmer)}
+.shot b:hover{color:var(--waiting)}
+
+footer{border-top:1px solid var(--line);background:var(--panel);padding:6px 18px;
+  font:10.5px var(--mono);color:var(--dimmer);display:flex;gap:16px}
+.live{color:var(--idle)}
+</style>
+
+<aside>
+  <div class="brand">
+    <a class="back" id="back" href="/">&larr; office</a>
+    <h1>nightshift talk</h1>
+    <p id="count">...</p>
+  </div>
+  <div class="search"><input id="q" placeholder="filter sessions  ( / )" spellcheck="false"></div>
+  <div class="list" id="list"></div>
+</aside>
+
+<main>
+  <header>
+    <span class="badge" id="state" style="display:none"></span>
+    <span class="who" id="who">&mdash;</span>
+    <span class="meta" id="meta"></span>
+    <span class="sp"></span>
+    <button id="bThink" class="on" title="thinking blocks (h)">thinking</button>
+    <button id="bTools" class="on" title="tool calls (t)">tools</button>
+    <button id="bOpen" title="expand every thinking / tool block (e)">expand</button>
+    <button id="bFollow" class="on" title="stick to the newest message (f)">follow</button>
+    <button id="bJump" title="jump this terminal to that tmux pane">focus pane</button>
+  </header>
+  <div class="feed" id="feed"><div class="wrap"><div class="empty">pick a session on the left</div></div></div>
+  <div class="dock" id="dock" style="display:none">
+    <div class="scr" id="scr">
+      <div class="cap" id="scrCap"><span class="caret">&#9656;</span>
+        <span>terminal</span><span id="scrHint"></span></div>
+      <pre id="scrBody"></pre>
+    </div>
+    <div class="compose" id="compose">
+      <div class="shots" id="shots"></div>
+      <div class="crow">
+        <textarea id="msg" rows="1" placeholder="message this session &mdash; enter sends, shift+enter newlines, paste an image"></textarea>
+        <div class="keys">
+          <button id="kEsc" title="escape - interrupt what it is doing">esc</button>
+          <button id="kInt" title="ctrl-c">&#94;C</button>
+          <button id="kUp" title="last thing typed in that pane">&uarr;</button>
+          <button id="kRet" title="press enter in that pane">&crarr;</button>
+        </div>
+        <button id="bSend">send</button>
+      </div>
+      <div class="note2" id="note2"></div>
+    </div>
+  </div>
+  <footer>
+    <span id="fState">idle</span>
+    <span id="fCount"></span>
+    <span id="fPath"></span>
+  </footer>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const S = {sid:null, next:null, sessions:[], row:null, tools:{}, n:0, lastDay:"",
+           follow:true, filter:"", busy:false, run:null, watch:null};
+
+/* ---------- helpers ---------- */
+const esc = s => (s||"").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const hhmm = ts => { const d = new Date(ts||0);
+  return (!ts || isNaN(d)) ? "" : d.toTimeString().slice(0,5); };
+const day = ts => { const d = new Date(ts||0);
+  return (!ts || isNaN(d)) ? "" : d.toDateString(); };
+
+/* just enough markdown that a reply reads the way it did in the terminal */
+function md(t){
+  const fences = [], MARK = "\u0000";   /* survives esc(), absent from prose */
+  t = (t||"").replace(/```(\w*)\n?([\s\S]*?)```/g, (m,l,c) =>
+      MARK + (fences.push(c.replace(/\n$/,"")) - 1) + MARK);
+  t = esc(t)
+      .replace(/`([^`\n]+)`/g, (m,c) => "<code>" + c + "</code>")
+      .replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")
+      .replace(/(^|\s)(https?:\/\/[^\s<)]+)/g,
+               '$1<a href="$2" target="_blank" rel="noreferrer">$2</a>')
+      .replace(/^#{1,6}[ \t]+(.+)$/gm, '<span class="h">$1</span>')
+      .replace(/^ {0,3}(?:-{3,}|\*{3,})[ \t]*$/gm, "<hr>");
+  return t.replace(/\u0000(\d+)\u0000/g,
+                   (m,i) => '<pre class="code">' + esc(fences[+i]) + "</pre>");
+}
+
+/* one line that says what a tool call is actually doing */
+function summarize(inp){
+  if(!inp || typeof inp !== "object") return "";
+  const p = k => typeof inp[k] === "string" ? inp[k] : "";
+  const first = p("command") || p("file_path") || p("path") || p("pattern") ||
+                p("query") || p("skill") || p("url") || p("description") || p("prompt");
+  if(first) return first.replace(/\s+/g," ").trim();
+  try { return JSON.stringify(inp).slice(0,160); } catch(e){ return ""; }
+}
+
+/* ---------- session list ---------- */
+async function loadSessions(){
+  let d;
+  try { d = await (await fetch("/api/talk/sessions")).json(); } catch(e){ return; }
+  S.sessions = d.sessions;
+  const heir = successor();               /* /clear starts a new conversation */
+  if(heir){
+    openSession(heir.sid);
+    $("#note2").className = "note2";
+    $("#note2").textContent = "that session started a new conversation - following it";
+    return;
+  }
+  renderList();
+  const r = S.sid && S.sessions.find(s => s.sid === S.sid);
+  if(r){ S.row = r; head(); }
+}
+
+const URG = {waiting:0, draft:1, idle:2, busy:3, unknown:4};
+const urg = s => URG[s.state] === undefined ? 4 : URG[s.state];
+
+/* only what is still running, split by the directory it runs in */
+function renderList(){
+  const f = S.filter.toLowerCase();
+  const keep = s => !f || (s.name + " " + (s.title||"") + " " + s.cwd).toLowerCase().includes(f);
+  const live = S.sessions.filter(s => s.live && keep(s));
+  const by = new Map();
+  for(const s of live){
+    const k = s.cwd || "?";
+    if(!by.has(k)) by.set(k, []);
+    by.get(k).push(s);
+  }
+  const groups = [...by.entries()].map(([path, rows]) => {
+    rows.sort((a,b) => urg(a) - urg(b) || (a.name < b.name ? -1 : 1));
+    return {path, rows, worst: Math.min(...rows.map(urg))};
+  }).sort((a,b) => a.worst - b.worst || (a.path < b.path ? -1 : 1));
+
+  const box = $("#list");
+  box.innerHTML = "";
+  for(const g of groups){
+    const parts = g.path.split("/").filter(Boolean);
+    const home = g.path === "~";                    /* a bare ~ reads as nothing */
+    const leaf = home ? "home" : (parts.pop() || g.path);
+    const parent = home ? "~" : (parts.length ? parts.join("/") + "/" : "");
+    const h = document.createElement("div");
+    h.className = "group";
+    h.title = g.path;
+    h.innerHTML = (parent ? '<div class="wp">' + esc(parent) + '</div>' : '') +
+      '<div class="wt"><span class="wn">' + esc(leaf) + '</span>' +
+      '<span class="n">' + g.rows.length + '</span></div>';
+    box.appendChild(h);
+    for(const s of g.rows){
+      const el = document.createElement("div");
+      el.className = "s " + s.state + (s.sid === S.sid ? " on" : "");
+      el.title = [s.name, s.title, s.cwd].filter(Boolean).join("\n");
+      const sub = s.title && s.title !== s.name ? s.title : "";
+      el.innerHTML =
+        '<div class="top"><span class="dot"></span>' +
+        '<span class="nm">' + esc(s.name) + '</span>' +
+        '<span class="q">' + esc(s.quiet_str) + '</span></div>' +
+        (sub ? '<div class="ti">' + esc(sub) + '</div>' : '');
+      el.onclick = () => openSession(s.sid);
+      box.appendChild(el);
+    }
+  }
+  if(!groups.length){
+    const n = document.createElement("div");
+    n.className = "group";
+    n.innerHTML = '<div class="wp">' + (f ? "nothing matches" : "no live sessions") + '</div>';
+    box.appendChild(n);
+  }
+  $("#count").textContent = live.length + " live · " +
+    groups.length + (groups.length === 1 ? " workspace" : " workspaces");
+}
+
+/* `/clear` (and starting a fresh conversation any other way) keeps the session
+   running but gives it a new id, so the file we were tailing simply stops. Find
+   the same pane's new conversation and move over to it. */
+function successor(){
+  if(!S.sid || !S.watch) return null;
+  const cur = S.sessions.find(s => s.sid === S.sid);
+  if(cur && cur.live) return null;                  /* still the live one */
+  return S.sessions.find(s => s.live && s.sid !== S.sid &&
+    (S.watch.pane ? s.pane === S.watch.pane
+                  : (s.name === S.watch.name && s.cwd === S.watch.cwd))) || null;
+}
+
+/* ---------- header ---------- */
+function head(){
+  const r = S.row;
+  if(!r){ $("#who").textContent = "—"; $("#meta").textContent = ""; dockState(); return; }
+  $("#who").textContent = r.name;
+  $("#meta").textContent = [r.title, r.cwd, r.where !== "-" ? r.where : "", r.model]
+                             .filter(Boolean).join("   ·   ");
+  const b = $("#state");
+  b.style.display = "";
+  b.textContent = r.state;
+  b.style.color = getComputedStyle(document.documentElement)
+                    .getPropertyValue("--" + r.state) || "#8b95a1";
+  $("#bJump").style.display = r.pane ? "" : "none";
+  dockState();
+  $("#fPath").textContent = r.sid ? "~/.claude/projects/.../" + r.sid.slice(0,8) + ".jsonl" : "";
+}
+
+/* ---------- transcript ---------- */
+function openSession(sid, from){
+  S.sid = sid;
+  S.next = (from === undefined ? null : from);
+  S.row = S.sessions.find(s => s.sid === sid) || null;
+  S.watch = S.row && S.row.live ? {pane: S.row.pane, name: S.row.name, cwd: S.row.cwd}
+                                : null;             /* what to re-find after a /clear */
+  S.tools = {}; S.n = 0; S.lastDay = ""; S.run = null;
+  S.follow = true; $("#bFollow").classList.add("on");
+  $("#feed").innerHTML = '<div class="wrap" id="wrap"></div>';
+  renderList(); head(); poll(true);
+}
+
+async function poll(first){
+  if(!S.sid || S.busy) return;
+  S.busy = true;
+  try{
+    const u = "/api/talk/transcript?sid=" + S.sid + (S.next === null ? "" : "&from=" + S.next);
+    const d = await (await fetch(u)).json();
+    if(d.error){ S.busy = false; return; }
+    if(d.reset){ S.busy = false; return openSession(S.sid, 0); }
+    S.next = d.next;
+    if(first && d.trimmed) headBanner();
+    if(d.events.length) append(d.events);
+    $("#fCount").textContent = S.n + " events · " + (d.size/1024|0) + " KB on disk";
+  }catch(e){}
+  S.busy = false;
+}
+
+function headBanner(){
+  S.run = null;
+  const b = document.createElement("button");
+  b.className = "more";
+  b.textContent = "load full history";
+  b.onclick = () => openSession(S.sid, 0);
+  $("#wrap").appendChild(b);
+}
+
+/* A run is everything Claude did between two things it said: the thinking and the
+   tool calls of one turn, wrapped so the whole stretch folds away as a unit. The
+   newest run stays open (you want to watch a live session work); it closes itself
+   once the turn ends, unless you opened or closed it by hand. */
+function runFor(){
+  if(S.run) return S.run;
+  const el = document.createElement("div");
+  el.className = "ev run fold open";
+  el.innerHTML = '<div class="hd"><span class="caret">&#9656;</span>' +
+    '<span class="nme">steps</span><span class="sum"></span><span class="st"></span></div>' +
+    '<div class="det"></div>';
+  el.querySelector(".hd").onclick = () => {
+    el.dataset.touched = "1";
+    el.classList.toggle("open");
+  };
+  el._counts = {};                       /* label -> {n, kind}, kind drives visibility */
+  $("#wrap").appendChild(el);
+  S.run = el;
+  return el;
+}
+function runAdd(el, label, kind){
+  const r = runFor();
+  const c = r._counts;
+  c[label] = c[label] || {n:0, kind:kind};
+  c[label].n++;
+  r.querySelector(".det").appendChild(el);
+  runLabel(r);
+}
+
+/* the head only ever promises what expanding will actually show: with thinking or
+   tools switched off, those steps drop out of the count, and a run left with
+   nothing to show hides itself */
+function runLabel(r){
+  const c = r._counts || {};
+  const show = k => c[k].kind === "think" ? !document.body.classList.contains("no-think")
+                                          : !document.body.classList.contains("no-tools");
+  const keys = Object.keys(c).filter(show);
+  const n = keys.reduce((a,k) => a + c[k].n, 0);
+  r.style.display = n ? "" : "none";
+  if(!n) return;
+  const parts = keys.sort((a,b) => c[b].n - c[a].n)
+                    .map(k => c[k].n > 1 ? k + " \u00d7" + c[k].n : k);
+  r.querySelector(".nme").textContent = n + (n === 1 ? " step" : " steps");
+  r.querySelector(".sum").textContent = parts.slice(0,4).join(" \u00b7 ") +
+                                        (parts.length > 4 ? " \u2026" : "");
+}
+function refreshRuns(){ document.querySelectorAll(".run").forEach(runLabel); }
+function endRun(){
+  if(S.run && S.run.dataset.touched !== "1") S.run.classList.remove("open");
+  S.run = null;
+}
+
+function append(evs){
+  const wrap = $("#wrap");
+  if(!wrap) return;
+  const feed = $("#feed");
+  const stuck = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 150;
+  for(const e of evs){
+    if(e.k === "result"){ attach(e); continue; }
+    const d = day(e.ts);
+    if(d && d !== S.lastDay){
+      S.lastDay = d;
+      endRun();
+      const sep = document.createElement("div");
+      sep.className = "tsep";
+      sep.textContent = d;
+      wrap.appendChild(sep);
+    }
+    const el = node(e);
+    if(!el) continue;
+    if(e.side) el.classList.add("side");
+    if(e.k === "tool" || e.k === "think")
+      runAdd(el, e.k !== "think" ? e.name                    /* say what is in there: */
+                 : (e.sealed ? "encrypted thinking" : "thinking"), /* sealed has no text */
+             e.k === "think" ? "think" : "tool");
+    else { endRun(); wrap.appendChild(el); }
+    S.n++;
+  }
+  if(S.follow && stuck) feed.scrollTop = feed.scrollHeight;
+}
+
+function node(e){
+  const el = document.createElement("div");
+  el.className = "ev " + e.k;
+  if(e.k === "user"){
+    el.innerHTML = '<div class="lbl">you · ' + hhmm(e.ts) + '</div>' +
+                   '<div class="body">' + md(e.text) + '</div>';
+  } else if(e.k === "say"){
+    el.innerHTML = '<div class="lbl">claude · ' + hhmm(e.ts) + '</div>' +
+                   '<div class="body">' + md(e.text) + '</div>';
+  } else if(e.k === "think"){
+    if(e.sealed){
+      el.className = "ev think fold sealed";
+      el.innerHTML = '<div class="hd" style="cursor:default"><span class="caret"></span>' +
+        '<span class="nme">thinking</span>' +
+        '<span class="sum">encrypted, not kept on disk</span></div>';
+      return el;
+    }
+    const txt = e.text || "";
+    const lines = txt ? txt.split("\n").length : 0;
+    el.className = "ev think fold";
+    el.innerHTML = '<div class="hd"><span class="caret">&#9656;</span>' +
+      '<span class="nme">thinking</span><span class="sum">' +
+      esc(txt.replace(/\s+/g, " ").slice(0, 200)) + '</span>' +
+      '<span class="st">' + (lines ? lines + "L" : "") + '</span></div>' +
+      '<div class="det"><div class="body">' + esc(txt) + '</div></div>';
+    el.querySelector(".hd").onclick = () => el.classList.toggle("open");
+  } else if(e.k === "cmd"){
+    el.textContent = "/" + e.text.replace(/^\//, "") + (e.args ? " " + e.args : "");
+  } else if(e.k === "note"){
+    el.innerHTML = '<div class="body">' + esc(e.text) + '</div>';
+  } else if(e.k === "tool"){
+    el.className = "ev tool fold";
+    el.innerHTML =
+      '<div class="hd"><span class="caret">▸</span><span class="nme">' + esc(e.name) +
+      '</span><span class="sum">' + esc(summarize(e.input)) +
+      '</span><span class="st">···</span></div>' +
+      '<div class="det"><div class="sec"><div class="cap">input</div><pre>' +
+      esc(JSON.stringify(e.input, null, 2)) + '</pre></div></div>';
+    el.querySelector(".hd").onclick = () => el.classList.toggle("open");
+    if(e.id) S.tools[e.id] = el;
+  } else return null;
+  return el;
+}
+
+function attach(e){
+  const txt = (e.text || "") + (e.imgs ? "\n[" + e.imgs + " image(s)]" : "");
+  const el = S.tools[e.id];
+  if(!el){                                  /* its call scrolled off the top */
+    const wrap = $("#wrap");
+    if(!wrap) return;
+    const orphan = document.createElement("div");
+    orphan.className = "ev tool fold";
+    orphan.innerHTML = '<div class="hd"><span class="caret">▸</span>' +
+      '<span class="nme">result</span><span class="sum">' +
+      esc(txt.split("\n")[0].slice(0,120)) + '</span></div>' +
+      '<div class="det"><div class="sec"><pre>' + esc(txt) + '</pre></div></div>';
+    orphan.querySelector(".hd").onclick = () => orphan.classList.toggle("open");
+    if(S.run) S.run.querySelector(".det").appendChild(orphan); else wrap.appendChild(orphan);
+    S.n++;
+    return;
+  }
+  const st = el.querySelector(".st");
+  const lines = txt ? txt.split("\n").length : 0;
+  st.textContent = e.ok ? (lines ? lines + "L" : "ok") : "error";
+  st.classList.toggle("bad", !e.ok);
+  const sec = document.createElement("div");
+  sec.className = "sec";
+  sec.innerHTML = '<div class="cap">' + (e.ok ? "result" : "error") + '</div><pre>' +
+                  esc(txt || "(empty)") + '</pre>';
+  el.querySelector(".det").appendChild(sec);
+}
+
+/* ---------- talking back ---------- */
+const dock = $("#dock"), msg = $("#msg");
+let shots = [];                                  /* pasted images, path + data url */
+
+function canTalk(){ return S.row && S.row.live && S.row.pane; }
+
+function dockState(){
+  const r = S.row;
+  dock.style.display = r ? "block" : "none";
+  if(!r) return;
+  const off = !canTalk();
+  $("#compose").classList.toggle("off", off);
+  const waiting = r.state === "waiting";
+  $("#bSend").textContent = waiting ? "type" : "send";
+  $("#bSend").classList.toggle("warn", waiting);
+  $("#note2").className = "note2" + (waiting ? " warn" : "");
+  $("#note2").textContent =
+      off ? (!r.live ? "this session has ended"
+             : r.kind === "bg"
+               ? "background agent - it shares its parent's pane, so there is no prompt to type into"
+               : "this session is not in tmux or herdr - nothing to type into")
+    : waiting ? "waiting on you - send types the text without pressing enter, then hit \u21b5"
+    : "";
+}
+
+async function say(extra){
+  if(!canTalk()) return;
+  const text = msg.value;
+  const waiting = S.row.state === "waiting";
+  const body = Object.assign({sid: S.sid, text: text,
+                              submit: !waiting}, extra || {});
+  if(!body.text && !body.key && body.submit === false) return;
+  let d = {};
+  try{
+    const r = await fetch("/api/talk/send", {method:"POST",
+      headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+    d = await r.json();
+    if(!r.ok){
+      $("#note2").className = "note2 warn";
+      $("#note2").textContent = d.error === "waiting"
+        ? "that session is waiting on you - press \u21b5 to send the enter anyway"
+        : "could not send: " + (d.error || r.status);
+      return;
+    }
+  }catch(e){
+    $("#note2").className = "note2 warn";
+    $("#note2").textContent = "server unreachable";
+    return;
+  }
+  if(!body.key){
+    msg.value = ""; msg.style.height = "auto"; shots = []; drawShots();
+    if(body.submit) S.follow = true, $("#bFollow").classList.add("on");
+  }
+  screen(true);
+}
+
+function drawShots(){
+  $("#shots").innerHTML = "";
+  shots.forEach((sh, i) => {
+    const el = document.createElement("span");
+    el.className = "shot";
+    el.innerHTML = '<img src="' + sh.url + '"><span>' + esc(sh.short) + '</span><b>&times;</b>';
+    el.querySelector("b").onclick = () => {
+      msg.value = msg.value.replace(sh.path, "").replace(/\s+$/,"");
+      shots.splice(i,1); drawShots();
+    };
+    $("#shots").appendChild(el);
+  });
+}
+
+/* a terminal cannot carry image bytes - park the paste on disk and hand the
+   session its path, which Claude Code will read */
+async function stash(file){
+  if(!canTalk() || !file || !/^image\//.test(file.type)) return;
+  try{
+    const r = await fetch("/api/talk/upload", {method:"POST",
+      headers:{"Content-Type": file.type}, body: file});
+    const d = await r.json();
+    if(!r.ok){ $("#note2").textContent = d.error || "upload failed"; return; }
+    shots.push({path: d.path, short: d.short.split("/").pop(),
+                url: URL.createObjectURL(file)});
+    msg.value = (msg.value ? msg.value.replace(/\s*$/, " ") : "") + d.path + " ";
+    msg.focus(); drawShots(); grow();
+  }catch(e){ $("#note2").textContent = "upload failed"; }
+}
+
+function grow(){ msg.style.height = "auto"; msg.style.height = msg.scrollHeight + "px"; }
+
+async function screen(force){
+  if(!S.sid || (!$("#scr").classList.contains("open") && !force)) return;
+  try{
+    const d = await (await fetch("/api/talk/screen?sid=" + S.sid)).json();
+    $("#scrBody").textContent = d.screen || "(nothing to show)";
+    $("#scrHint").textContent = d.live ? "" : "\u00b7 no pane";
+  }catch(e){}
+}
+
+msg.addEventListener("input", grow);
+msg.addEventListener("keydown", e => {
+  if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); say(); }
+});
+msg.addEventListener("paste", e => {
+  for(const it of (e.clipboardData || {}).items || [])
+    if(it.kind === "file"){ e.preventDefault(); stash(it.getAsFile()); }
+});
+msg.addEventListener("dragover", e => e.preventDefault());
+msg.addEventListener("drop", e => {
+  const f = (e.dataTransfer.files || [])[0];
+  if(f && /^image\//.test(f.type)){ e.preventDefault(); stash(f); }
+});
+$("#bSend").onclick = () => say();
+$("#kEsc").onclick = () => say({key:"esc"});
+$("#kInt").onclick = () => say({key:"ctrl-c"});
+$("#kUp").onclick  = () => say({key:"up"});
+$("#kRet").onclick = () => say({key:"enter"});
+$("#scrCap").onclick = () => {
+  const on = $("#scr").classList.toggle("open");
+  try{ localStorage.setItem("nightshift.screen", on ? "1" : "0"); }catch(e){}
+  if(on) screen(true);
+};
+try{ if(localStorage.getItem("nightshift.screen") === "1") $("#scr").classList.add("open"); }
+catch(e){}
+
+/* ---------- controls ---------- */
+const toggle = (btn, cls) => {
+  btn.classList.toggle("on");
+  document.body.classList.toggle(cls, !btn.classList.contains("on"));
+  refreshRuns();
+};
+$("#bThink").onclick = () => toggle($("#bThink"), "no-think");
+$("#bTools").onclick = () => toggle($("#bTools"), "no-tools");
+$("#bOpen").onclick = () => {
+  const on = $("#bOpen").classList.toggle("on");
+  document.body.classList.toggle("open-all", on);
+  $("#bOpen").textContent = on ? "collapse" : "expand";
+  if(!on) document.querySelectorAll(".fold.open").forEach(el => el.classList.remove("open"));
+};
+$("#bFollow").onclick = () => {
+  S.follow = !S.follow;
+  $("#bFollow").classList.toggle("on", S.follow);
+  if(S.follow) $("#feed").scrollTop = $("#feed").scrollHeight;
+};
+$("#bJump").onclick = () => {
+  if(!S.row || !S.row.pane) return;
+  fetch("/api/focus", {method:"POST", headers:{"Content-Type":"application/json"},
+                       body: JSON.stringify({pane: S.row.pane})});
+};
+$("#q").oninput = e => { S.filter = e.target.value; renderList(); };
+
+addEventListener("keydown", e => {
+  const tag = e.target.tagName;              // never steal a key from a box you type in
+  if(tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable){
+    if(e.key === "Escape") e.target.blur();
+    return;
+  }
+  if(e.key === "/"){ e.preventDefault(); $("#q").focus(); return; }
+  if(e.key === "t") $("#bTools").click();
+  if(e.key === "h") $("#bThink").click();
+  if(e.key === "f") $("#bFollow").click();
+  if(e.key === "e") $("#bOpen").click();
+  if(e.key === "g") $("#feed").scrollTop = 0;
+  if(e.key === "G") $("#feed").scrollTop = $("#feed").scrollHeight;
+  if(e.key === "j" || e.key === "k"){
+    const vis = [...document.querySelectorAll(".s")];
+    const i = vis.findIndex(el => el.classList.contains("on"));
+    const nx = vis[Math.max(0, Math.min(vis.length - 1, i + (e.key === "j" ? 1 : -1)))];
+    if(nx) nx.click();
+  }
+});
+$("#feed").addEventListener("scroll", () => {
+  const f = $("#feed");
+  if(S.follow && f.scrollHeight - f.scrollTop - f.clientHeight > 250){
+    S.follow = false;
+    $("#bFollow").classList.remove("on");
+  }
+});
+
+/* the office is only there when the office server is the one serving us */
+fetch("/api/sessions", {cache:"no-store"})
+  .then(r => { if(r.ok) $("#back").style.display = "block"; })
+  .catch(() => {});
+
+/* ---------- clocks ---------- */
+loadSessions().then(() => {
+  const want = new URLSearchParams(location.search).get("sid");
+  const first = S.sessions.find(s => s.sid === want) ||
+                S.sessions.find(s => s.live && s.has);
+  if(first) openSession(first.sid);
+});
+setInterval(loadSessions, 4000);
+setInterval(() => {
+  poll(false);
+  screen(false);
+  $("#fState").textContent = S.sid ? "following" : "idle";
+  $("#fState").className = S.sid ? "live" : "";
+}, 1500);
+</script>

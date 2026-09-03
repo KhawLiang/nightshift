@@ -2,7 +2,7 @@
 
     nightshift            the pixel office in a browser
     nightshift board      the terminal table
-    nightshift read       read any session's conversation, live
+    nightshift talk       read any session's conversation, and reply to it
 
 Anything after the subcommand is passed straight through.
 """
@@ -21,9 +21,9 @@ USAGE = """nightshift - who on this Mac is working, and who is waiting on you
 
   nightshift herdr           what the herdr backend sees (diagnostic)
 
-  nightshift read            conversation reader, opens a browser
-  nightshift read --port N   serve somewhere else
-  nightshift read --no-open  serve without opening a browser
+  nightshift talk            conversation reader + compose box, opens a browser
+  nightshift talk --port N   serve somewhere else
+  nightshift talk --no-open  serve without opening a browser
 """
 
 
@@ -35,10 +35,10 @@ def main():
     if args and args[0] == "herdr":
         from .herdr import main as diag
         return diag()
-    if args and args[0] == "read":
-        from .read import main as reader
-        sys.argv = ["nightshift read"] + args[1:]
-        return reader()
+    if args and args[0] in ("talk", "read"):          # `read` is the old name
+        from .talk import main as talk
+        sys.argv = ["nightshift talk"] + args[1:]
+        return talk()
     if args and args[0] == "board":
         from .fleet import main as board
         sys.argv = ["nightshift board"] + args[1:]

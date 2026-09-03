@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
-"""nightshift read - read what any Claude Code session on this Mac is saying.
+"""nightshift talk - read what any Claude Code session on this Mac is saying,
+and say something back.
 
-The office shows *state*; this shows *content*. Left: every session, live ones
-first. Right: that session's conversation, tailed as it is written.
+The office shows *state*; this shows *content*. Left: every running session,
+grouped by workspace. Right: that session's conversation, tailed as it is
+written, with a box to type into and the pane's live screen above it.
 
 Claude Code appends one JSON object per line to
 ~/.claude/projects/<slug>/<sessionId>.jsonl, so following a conversation is a
 byte-offset tail - the browser sends back the offset it stopped at and gets only
 what was appended since.
 
-Usage:  nightshift read            start and open a browser
-        nightshift read --port 9000
-        nightshift read --no-open
+Usage:  nightshift talk            start and open a browser
+        nightshift talk --port 9000
+        nightshift talk --no-open   (`nightshift read` still works)
 """
 import glob, json, os, re, sys, time, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .core import collect, focus_pane, ago, PROJ, HOME
+from .core import collect, focus_pane, send_pane, send_key, screen_of, ago, PROJ, HOME
 
 HERE = os.path.dirname(os.path.realpath(__file__))
-PAGE = os.path.join(HERE, "read.html")
+PAGE = os.path.join(HERE, "talk.html")
 
 SID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 TAG_RE = re.compile(r"<(system-reminder|local-command-caveat|local-command-stdout"
@@ -242,27 +244,76 @@ def sessions():
     return rows
 
 
-class ReaderRoutes:
-    """The reader's GET routes, mixed into both servers.
+ALIASES = {"/read": "/talk", "/read/": "/talk/"}
+IMG_TYPES = {"image/png": "png", "image/jpeg": "jpg",
+             "image/gif": "gif", "image/webp": "webp"}
+UPLOAD_CAP = 10 * 1024 * 1024
+PASTE_DIR = os.path.join(HOME, ".claude", "nightshift-paste")
 
-    The office and the reader are two views of the same registry, so `nightshift`
-    serves both on one port: the office at /, the reader at /read. Namespaced
-    under /api/read/ because the office's own /api/sessions must keep returning
-    live sessions only - the reader's list also carries ended ones, and those
-    have no desk to sit at."""
 
-    def reader_get(self, path, q):
-        if path in ("/read", "/read/"):
+def _alias(path):
+    """/read is what /talk used to be called; old tabs and links keep working."""
+    if path in ALIASES:
+        return ALIASES[path]
+    if path.startswith("/api/read/"):
+        return "/api/talk/" + path[len("/api/read/"):]
+    return path
+
+
+def _row_for(sid):
+    """The live session with this id, or None. The browser never names a pane."""
+    if not SID_RE.match(sid or ""):
+        return None
+    for r in collect():
+        if r["sid"] == sid:
+            return r
+    return None
+
+
+def _keep_image(data, ext):
+    """Park a pasted image on disk and return its path - a terminal cannot carry
+    image bytes, but Claude Code can read a file. Anything older than a week goes."""
+    os.makedirs(PASTE_DIR, exist_ok=True)
+    cutoff = time.time() - 7 * 86400
+    for old in glob.glob(os.path.join(PASTE_DIR, "*")):
+        try:
+            if os.path.getmtime(old) < cutoff:
+                os.remove(old)
+        except OSError:
+            pass
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    path = os.path.join(PASTE_DIR, "%s.%s" % (stamp, ext))
+    n = 1
+    while os.path.exists(path):
+        path = os.path.join(PASTE_DIR, "%s-%d.%s" % (stamp, n, ext))
+        n += 1
+    with open(path, "wb") as f:
+        f.write(data)
+    return path
+
+
+class TalkRoutes:
+    """Talk's routes, mixed into both servers.
+
+    The office and talk are two views of the same registry, so `nightshift`
+    serves both on one port: the office at /, talk at /talk (/read still works,
+    it is what this page used to be called). Namespaced under /api/talk/ because
+    the office's own /api/sessions must keep returning live sessions only - the
+    talk list also carries ended ones, and those have no desk to sit at."""
+
+    def talk_get(self, path, q):
+        path = _alias(path)
+        if path in ("/talk", "/talk/"):
             try:
                 with open(PAGE, "rb") as f:      # re-read so edits are live
                     self._send(200, f.read(), "text/html; charset=utf-8")
             except OSError as e:
                 self._send(500, "cannot read %s: %s" % (PAGE, e), "text/plain")
             return True
-        if path == "/api/read/sessions":
+        if path == "/api/talk/sessions":
             self._json(200, {"now": int(time.time() * 1000), "sessions": sessions()})
             return True
-        if path == "/api/read/transcript":
+        if path == "/api/talk/transcript":
             sid = q.get("sid", "")
             if not SID_RE.match(sid):
                 self._json(400, {"error": "bad session id"})
@@ -286,11 +337,69 @@ class ReaderRoutes:
             self._json(200, dict(events=ev, next=nxt, size=size, trimmed=trimmed,
                                  reset=reset, title=title, cwd=cwd))
             return True
+        if path == "/api/talk/screen":                # what that pane shows now
+            row = _row_for(q.get("sid", ""))
+            if not row or not row["pane"]:
+                self._json(200, {"screen": "", "live": False})
+                return True
+            self._json(200, {"screen": screen_of(row["pane"], 14), "live": True,
+                             "state": row["state"]})
+            return True
+        return False
+
+    def talk_post(self, path, body, ctype=""):
+        """POST routes. `body` is raw bytes - JSON for send, image bytes for upload."""
+        path = _alias(path)
+        if path == "/api/talk/send":
+            try:
+                d = json.loads(body or b"{}")
+            except Exception:
+                self._json(400, {"error": "bad body"})
+                return True
+            row = _row_for(d.get("sid") or "")
+            if not row:
+                self._json(400, {"error": "unknown session"})
+                return True
+            if not row["pane"]:
+                self._json(400, {"error": "that session is not in tmux or herdr"})
+                return True
+            key = d.get("key") or ""
+            if key:
+                err = send_key(row["pane"], key)
+                self._json(400 if err else 200, {"error": err} if err else {"ok": True})
+                return True
+            text = d.get("text") or ""
+            submit = bool(d.get("submit", True))
+            # a session that is blocked on a prompt may have a dialog on screen, and
+            # Enter would answer it - so the first press only types, and committing
+            # takes a second, deliberate one.
+            if submit and row["state"] == "waiting" and not d.get("confirm"):
+                self._json(409, {"error": "waiting", "state": "waiting"})
+                return True
+            err = send_pane(row["pane"], text, submit)
+            self._json(400 if err else 200,
+                       {"error": err} if err else {"ok": True, "submitted": submit})
+            return True
+        if path == "/api/talk/upload":
+            ext = IMG_TYPES.get((ctype or "").split(";")[0].strip())
+            if not ext:
+                self._json(415, {"error": "only png, jpeg, gif or webp"})
+                return True
+            if len(body) > UPLOAD_CAP:
+                self._json(413, {"error": "image over 10 MB"})
+                return True
+            try:
+                path_ = _keep_image(body, ext)
+            except OSError as e:
+                self._json(500, {"error": str(e)})
+                return True
+            self._json(200, {"path": path_, "short": path_.replace(HOME, "~")})
+            return True
         return False
 
 
-class Handler(ReaderRoutes, BaseHTTPRequestHandler):
-    server_version = "nightshift-read"
+class Handler(TalkRoutes, BaseHTTPRequestHandler):
+    server_version = "nightshift-talk"
 
     def log_message(self, *a):
         pass
@@ -315,17 +424,21 @@ class Handler(ReaderRoutes, BaseHTTPRequestHandler):
         path, _, query = self.path.partition("?")
         q = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
         if path == "/":
-            path = "/read"                       # standalone: the reader is home
-        if self.reader_get(path, q):
+            path = "/talk"                       # standalone: talk is home
+        if self.talk_get(path, q):
             return
         return self._send(404, "not found", "text/plain")
 
     def do_POST(self):
-        if self.path.split("?")[0] != "/api/focus":
+        path = self.path.split("?")[0]
+        n = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(min(n, UPLOAD_CAP + 1024)) if n else b""
+        if self.talk_post(path, raw, self.headers.get("Content-Type", "")):
+            return
+        if path != "/api/focus":
             return self._send(404, "not found", "text/plain")
         try:
-            n = int(self.headers.get("Content-Length") or 0)
-            body = json.loads(self.rfile.read(min(n, 4096)) or b"{}")
+            body = json.loads(raw or b"{}")
         except Exception:
             return self._json(400, {"error": "bad body"})
         pane = body.get("pane") or ""
@@ -345,14 +458,14 @@ def main():
     try:
         srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     except OSError as e:
-        print("nightshift read: cannot bind %s (%s)" % (url, e)); sys.exit(1)
-    print("nightshift read serving %s  (ctrl-c to stop)" % url)
+        print("nightshift talk: cannot bind %s (%s)" % (url, e)); sys.exit(1)
+    print("nightshift talk serving %s  (ctrl-c to stop)" % url)
     if "--no-open" not in args:
         webbrowser.open(url)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
-        print("\nnightshift read stopped")
+        print("\nnightshift talk stopped")
 
 
 if __name__ == "__main__":

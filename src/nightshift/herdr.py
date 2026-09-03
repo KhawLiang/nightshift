@@ -167,6 +167,27 @@ def focus(pane):
     return ""
 
 
+def send(pane, text="", keys=None):
+    """Type into a pane. '' on success, else why not.
+
+    One `pane.send_input` carries the text and the keys together, so a message
+    and its Enter land in that order without a race.
+    """
+    if not ID_RE.match(pane or ""):
+        return "not a pane id"
+    params = {"pane_id": pane}
+    if text:
+        params["text"] = text
+    if keys:
+        params["keys"] = list(keys)
+    if len(params) == 1:
+        return ""                                   # nothing to send
+    r = call("pane.send_input", params)
+    if r is None:
+        return "herdr did not take input for %s" % pane
+    return ""
+
+
 def main():
     """`nightshift herdr` - what this backend can see, for when it misbehaves."""
     from .core import collect

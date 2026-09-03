@@ -3,17 +3,22 @@
 A pixel office for every Claude Code session running on this Mac. One room per
 tmux session, one desk per agent, rainy night city out the windows. You glance
 at it and know who is working and who is waiting on you - and when you want to
-know *what* one of them is doing, `nightshift read` shows the conversation.
+know *what* one of them is doing, `nightshift talk` shows the conversation -
+and lets you answer it.
 
 Three views, same registry:
 
-- **`nightshift`** — the office, in a browser. Click a desk to jump to that
-  tmux pane.
+- **`nightshift`** — the office, in a browser. Click a person to jump to that
+  pane, click their desk to read the conversation. A rail down the left side
+  lists every running agent grouped by the directory it runs in, background
+  agents included - they have no desk, so this is the only place they appear.
 - **`nightshift board`** — the same thing as a terminal table, sorted by "how
   much does this one need you": waiting → draft → idle → busy.
-- **`nightshift read`** — what they are actually *saying*. Every session on the
-  left, its conversation on the right, tailed as it is written. The office
-  serves it too, at `/read`, so one command gives you both.
+- **`nightshift talk`** — what they are actually *saying*, and a box to say
+  something back. Every running session on the left grouped by workspace, its
+  conversation on the right tailed as it is written, the pane's live screen and
+  a compose box at the bottom. The office serves it too, at `/talk`, so one
+  command gives you both. (It used to be `nightshift read`; that still works.)
 
 ## Run
 
@@ -30,23 +35,38 @@ nightshift board --all     # include background agents
 
 nightshift herdr           # what the herdr backend sees, when it misbehaves
 
-nightshift read            # the reader on its own, 127.0.0.1:8788
-nightshift read --port 9001
-nightshift read --no-open
+nightshift talk            # talk on its own, 127.0.0.1:8788
+nightshift talk --port 9001
+nightshift talk --no-open  # `nightshift read` is the old name, still accepted
 ```
 
 Nothing has to be switched on to record a session: Claude Code writes every
-conversation to disk as it happens. The reader only reads those files.
+conversation to disk as it happens. Talk reads those files, and writes back only
+through the pane you point it at.
 
-In the office: `f` toggles fullscreen, hover a desk for its unsent draft,
-click a desk to `tmux select-window` + `select-pane` onto it, **shift-click a
-desk to read that session's conversation**, `r` (or the header button) opens the
-reader on its own.
+In the office: **click a person** to `tmux select-window` + `select-pane` onto
+their pane (hovering lights them up and puts a reticle round them), **click
+their desk** to open that conversation in talk. `n` toggles the workspace rail
+between full and a strip of dots, `f` toggles fullscreen, `r` (or the header's
+`talk →`) opens talk. In the rail: a row opens the conversation, its `▸` focuses
+the pane, shift-click does the same.
 
-In the reader: `j`/`k` walk the session list, `/` filters it, `t` hides tool
-calls, `h` shows thinking markers, `f` unsticks from the newest message,
-`g`/`G` jump to the top or the bottom. Click a tool call to see its full input
-and result. **focus pane** puts your terminal on that session.
+In talk: `j`/`k` walk the session list, `/` filters it, `t` hides tool calls,
+`h` hides thinking, `e` expands every step, `f` unsticks from the newest
+message, `g`/`G` jump to the top or the bottom. Everything one turn did between
+two replies folds into a single `5 steps · Bash ×3` line; the newest one stays
+open, older ones close themselves. The count only ever promises what expanding
+will show, so hiding thinking or tools re-counts it.
+
+The compose box sends on enter (shift+enter for a newline), `esc` / `^C` / `↑` /
+`↵` press those keys in the pane, and **terminal** above it shows that pane's
+real screen, so you can see whether you are typing at a prompt or at a dialog. A
+pasted image is saved to `~/.claude/nightshift-paste/` and its path goes into the
+message - a terminal cannot carry image bytes, but Claude Code can read a file.
+
+`/clear` does not end a session, it gives it a new id, so talk notices the pane's
+old conversation stopped and follows the new one instead of sitting there looking
+frozen.
 
 ## Install
 
@@ -80,11 +100,12 @@ since. Opening a session reads a window off the end (widened until it holds
 enough events - one pasted image can be bigger than the whole window), with
 "load full history" for the rest.
 
-Two things that look like bugs but are not: **thinking is never readable** -
-Claude Code writes the encrypted signature and an empty string, so the reader
-shows only a marker where a pause happened; and **ended sessions have no name**,
-because the registry entry is gone the moment the process exits, so they are
-listed by their AI title instead.
+Two things that look like bugs but are not: **thinking is often not readable** -
+Claude Code writes an encrypted signature and an empty string, so talk shows a
+`encrypted thinking` line where a pause happened; and **ended sessions have no
+name**, because the registry entry is gone the moment the process exits. Talk's
+sidebar lists only what is still running, grouped by workspace, but the API still
+returns the last 40 ended transcripts, so a link to one keeps working.
 
 ## tmux, or herdr
 
@@ -125,24 +146,45 @@ Deliberately dependency-free.
 | Layer | What |
 | --- | --- |
 | Data | `~/.claude/sessions/<pid>.json`, written by Claude Code itself, plus `tmux capture-pane` (or herdr's `pane.read`) for unsubmitted drafts, plus the transcript `.jsonl` for the reader |
-| Server | `http.server.ThreadingHTTPServer`, stdlib, loopback only; the office also serves the reader at `/read` + `/api/read/*` |
-| UI | one HTML file, canvas 2D, hand-rolled pixel renderer, no framework, no build step |
+| Server | `http.server.ThreadingHTTPServer`, stdlib, loopback only; the office also serves talk at `/talk` + `/api/talk/*` (`/read` and `/api/read/*` still answer) |
+| UI | two HTML files, canvas 2D, hand-rolled pixel renderer, no framework, no build step |
 
-`src/nightshift/office.html` is re-read on every request, so editing it and
-refreshing the browser is the whole dev loop. No bundler, no watcher.
+`office.html` and `talk.html` are re-read on every request, so editing one and
+refreshing the browser is the whole dev loop. No bundler, no watcher. The Python
+is loaded once at start, though - change a route and the server needs a restart.
+
+## Endpoints
+
+Everything the two servers answer. `nightshift` serves all of it on one port;
+`nightshift talk` serves the `/talk` half and maps `/` to `/talk`.
+
+| | | |
+| --- | --- | --- |
+| `GET` | `/` | the office (on the talk server, `/talk`) |
+| `GET` | `/api/sessions` | `{sessions}` have desks, `{all}` adds background agents |
+| `POST` | `/api/focus` | `{pane}` - select that tmux/herdr pane |
+| `GET` | `/talk` | the transcript reader and compose box |
+| `GET` | `/api/talk/sessions` | live sessions, then the 40 most recent ended ones |
+| `GET` | `/api/talk/transcript?sid=&from=` | tail one conversation from a byte offset |
+| `GET` | `/api/talk/screen?sid=` | the last 14 lines that pane is showing |
+| `POST` | `/api/talk/send` | `{sid, text, submit, key, confirm}` - type into that pane |
+| `POST` | `/api/talk/upload` | raw image bytes in, a path on disk out |
+
+`/read` and `/api/read/*` still answer as aliases of `/talk` and `/api/talk/*`.
+Anything else is a 404.
 
 ## Layout
 
 ```
 src/nightshift/
-  cli.py            entry point: office, or `board` / `read`
+  cli.py            entry point: office, or `board` / `talk`
   core.py           session discovery, shared by all three views
   office.py         HTTP server + /api/sessions + /api/focus
   fleet.py          terminal renderer
-  read.py           transcript parser + the /read routes both servers wear
+  talk.py           transcript parser + the /talk routes both servers wear
   herdr.py          herdr backend, for sessions that are not in tmux
-  office.html       the animation
-  read.html         the reader
+  office.html       the animation, the workspace rail
+  talk.html         the transcript reader and compose box
 bin/                node shim, so npm can install the same entry point
 docs/               illustrated architecture notes
 ```
@@ -151,11 +193,19 @@ docs/               illustrated architecture notes
 
 Both servers bind `127.0.0.1` only. `/api/focus` accepts a tmux pane id matching
 `^%\d+$` **and** present in a live `collect()`, then runs only `select-window`
-and `select-pane`. It never calls `send-keys` and never builds a shell string.
+and `select-pane`. It never calls `send-keys` and never builds a shell string -
+typing has its own route, below.
 
-The reader is read-only and cannot type into a session. `/api/read/transcript`
-takes a session id that must match the UUID shape and must resolve through a
-glob under `~/.claude/projects/` - no path from the browser ever reaches
-`open()`. It is namespaced under `/api/read/` because the office's own
-`/api/sessions` must keep returning live sessions only: the reader's list also
+`/api/talk/transcript` takes a session id that must match the UUID shape and must
+resolve through a glob under `~/.claude/projects/` - no path from the browser
+ever reaches `open()`. It is namespaced under `/api/talk/` because the office's
+own `/api/sessions` must keep returning live sessions only: talk's list also
 carries ended ones, and those have no desk to sit at.
+
+`/api/talk/send` is the one route that types: it takes a *session id*, never a
+pane, resolves it through the same live `collect()` gate `/api/focus` uses, caps
+the text at 8 KB, passes it as a single argv item (herdr `pane.send_input`, or a
+tmux buffer + bracketed paste - never a shell string), and only ever presses one
+of four keys: `esc`, `ctrl-c`, `up`, `enter`. A session in the `waiting` state
+gets the text typed **without** enter, because enter might answer a permission
+dialog on screen; committing takes a second, explicit press.
