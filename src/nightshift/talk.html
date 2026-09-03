@@ -754,6 +754,16 @@ addEventListener("keydown", e => {
     if(nx) nx.click();
   }
 });
+/* same as the office: a covered tab is throttled, so catch up on return */
+function wake(){
+  if (document.hidden) return;
+  loadSessions();
+  poll(false);
+  screen(false);
+}
+addEventListener("visibilitychange", wake);
+addEventListener("focus", wake);
+
 $("#feed").addEventListener("scroll", () => {
   const f = $("#feed");
   if(S.follow && f.scrollHeight - f.scrollTop - f.clientHeight > 250){

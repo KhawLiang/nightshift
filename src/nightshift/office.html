@@ -1509,6 +1509,13 @@ addEventListener("keydown", e=>{
   if (e.key === "r") openTalk(null);
   if (e.key === "n") toggleNav();
 });
+/* focusing a pane raises the terminal over this window, and a covered tab has
+   its animation frame and timers throttled to a crawl - so catch up the moment
+   it comes back instead of waiting out the next poll */
+function wake(){ if (!document.hidden) { plateCache = ""; lastT = 0; poll(); } }
+addEventListener("visibilitychange", wake);
+addEventListener("focus", wake);
+
 addEventListener("resize", ()=>{ plateCache=""; buildRooms(sessions); });
 addEventListener("fullscreenchange", ()=>{ plateCache=""; setTimeout(()=>buildRooms(sessions), 60); });
 poll(); setInterval(poll, 2000);
