@@ -102,6 +102,12 @@
              text-overflow:ellipsis; white-space:nowrap; }
   .row .tag { font-size:8px; color:var(--dim); border:1px solid var(--line);
               border-radius:3px; padding:0 3px; letter-spacing:.06em; }
+  .more {
+    display:flex; align-items:center; gap:.35rem; margin-left:.1rem;
+    padding:.18rem .35rem; border-radius:4px; cursor:pointer;
+    font-size:9px; color:var(--dim); letter-spacing:.02em;
+  }
+  .more:hover { background:rgba(241,238,230,.07); color:var(--text); }
   .row .go { flex:0 0 auto; font-size:11px; color:var(--dim); opacity:0; padding:0 2px; }
   .row:hover .go { opacity:1; }
   .row .go:hover { color:var(--text); }
@@ -1375,6 +1381,14 @@ function counts(){
 /* ---------- the workspace rail: every running agent, grouped by cwd ---------- */
 const nav = document.getElementById("nav");
 let navCache = "";
+/* Claude Code keeps spare background agents warm: alive, idle, and untouched
+   for hours. They are worth keeping (one may be doing real work) but not worth
+   a row each, so past this they fold into a single line per workspace. */
+const BG_STALE = 3600 * 1000;
+const staleBg = a => a.kind === "bg" && a.state === "idle" &&
+                     (a.quiet || 0) * 1000 > BG_STALE;
+let bgOpen = {};                                  /* workspaces you unfolded */
+
 function wsGroups(){
   const by = new Map();
   for (const s of roster) {
@@ -1392,7 +1406,7 @@ function wsGroups(){
 }
 function drawNav(){
   const groups = wsGroups();
-  const key = groups.map(g=> g.path + ":" + g.list.map(a=>
+  const key = groups.map(g=> g.path + ":" + (bgOpen[g.path] ? "+" : "") + g.list.map(a=>
     a.name+a.state+a.quiet_str+a.kind+(a.sid===lastRead?"*":"")).join(",")).join("|");
   if (key === navCache) return;
   navCache = key;
@@ -1418,7 +1432,9 @@ function drawNav(){
                    + '<span class="wc"><i class="dot" style="background:'+worstCol+'"></i>'
                    + g.list.length+'</span></div>';
     box.appendChild(head);
+    const stale = bgOpen[g.path] ? [] : g.list.filter(staleBg);
     for (const a of g.list) {
+      if (stale.includes(a)) continue;
       const col = stateColor(a.state), bg = a.kind === "bg";
       const nm = splitName(a.name, home ? "" : leaf);
       const row = document.createElement("div");
@@ -1443,6 +1459,15 @@ function drawNav(){
       row.addEventListener("mousemove", e=>moveTip(e));
       row.addEventListener("mouseleave", ()=>{ hoverName = ""; hideTip(); });
       box.appendChild(row);
+    }
+    if (stale.length) {                           // one line for the warm spares
+      const more = document.createElement("div");
+      more.className = "more";
+      more.title = stale.map(a=> a.name).join("\n");
+      more.innerHTML = '<span>&#8250;</span><span>+' + stale.length +
+                       ' idle bg</span>';
+      more.addEventListener("click", ()=>{ bgOpen[g.path] = true; navCache = ""; drawNav(); });
+      box.appendChild(more);
     }
     nav.appendChild(box);
   }

@@ -144,6 +144,13 @@ Drafts are read only for `kind: "interactive"` sessions. Background agents are
 children of an interactive one and share its pane, so they would otherwise
 inherit - and mis-report - its unsent text.
 
+A background agent spawned detached has no pane at all - its process ancestry
+never reaches one - so it gets no desk, no `▸` in the rail and nothing to type
+into. Claude Code also keeps spares warm: alive, idle and untouched for hours.
+Past an hour idle they fold into one `+2 idle bg` line per workspace in the rail,
+which opens on click. To end one, its registry filename is its pid:
+`kill $(basename ~/.claude/sessions/31048.json .json)`.
+
 For the same reason they get no desk in the office and no row on the board:
 Claude Code keeps spare ones warm, they have no prompt of their own, and there
 is nothing to click through to. `nightshift board --all` shows them, and the
