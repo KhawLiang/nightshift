@@ -72,8 +72,11 @@ frozen.
 
 Claude Code has no notion of read/unread, so nightshift keeps its own:
 `~/.claude/nightshift-seen.json`, one timestamp per session id. Opening a session
-in talk stamps it, so does watching output arrive while following, and so does
-clicking a person to focus their pane - all three mean "I have seen this".
+in talk stamps it, so does watching output arrive while following, so does
+clicking a person to focus their pane - and so does simply having that pane
+focused in herdr, since a pane you are looking at is not one you are behind on
+(`pane.current` names the focused pane and the agent session in it; the stamp is
+written when the focus moves or every 30s, not on every poll).
 Anything written since then makes the session **unread**, and an idle session
 with unread output says so on its desk plate, in the rail, on the board and in
 the header count, in blue instead of green. Busy sessions say `working` rather

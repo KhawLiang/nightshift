@@ -14,6 +14,7 @@ PROJ = os.path.join(HOME, ".claude", "projects")
 RANK = dict(waiting=0, draft=1, idle=2, busy=3, unknown=4)
 SEEN = os.path.join(HOME, ".claude", "nightshift-seen.json")
 _seen = {"t": 0.0, "map": {}}
+_focus = {"sid": "", "t": 0.0}
 PANE_RE = re.compile(r"^%\d+$")
 
 
@@ -245,6 +246,17 @@ def collect():
     seen = seen_map()
     for r in rows:                               # anything written since you looked
         r["unread"] = bool(r["touched"]) and r["touched"] > seen.get(r["sid"], 0)
+    # the pane you have focused is one you are looking at, so it is never unread -
+    # stamped to disk when the focus moves, or once every half minute, not every poll
+    watching = herdr.current()[1] if herdr.available() else ""
+    if watching:
+        for r in rows:
+            if r["sid"] == watching:
+                r["unread"] = False
+        now = time.time()
+        if watching != _focus["sid"] or now - _focus["t"] > 30:
+            mark_seen(watching)
+            _focus["sid"], _focus["t"] = watching, now
     rows.sort(key=lambda r: (RANK[r["state"]], r["name"]))
     return rows
 

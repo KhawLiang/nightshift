@@ -167,6 +167,16 @@ def focus(pane):
     return ""
 
 
+def current():
+    """(pane_id, sessionId) of the pane you are looking at right now, or ('', '')."""
+    r = call("pane.current") or {}
+    p = r.get("pane") or {}
+    if not p.get("focused"):
+        return "", ""
+    sess = p.get("agent_session") or {}
+    return p.get("pane_id") or "", (sess.get("value") or "")
+
+
 def send(pane, text="", keys=None):
     """Type into a pane. '' on success, else why not.
 
