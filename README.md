@@ -104,7 +104,7 @@ Open it in a browser.
 The short version: Claude Code already writes each session's state to disk, so
 nothing here has to be inferred.
 
-The reader adds one more file Claude Code already keeps:
+Talk adds one more file Claude Code already keeps:
 `~/.claude/projects/<slug>/<sessionId>.jsonl`, one JSON object per line,
 appended as the conversation happens. So following a live session is a byte
 offset: the browser sends back where it stopped and gets only what was written
@@ -154,9 +154,9 @@ which opens on click. To end one, its registry filename is its pid:
 For the same reason they get no desk in the office and no row on the board:
 Claude Code keeps spare ones warm, they have no prompt of their own, and there
 is nothing to click through to. `nightshift board --all` shows them, and the
-reader still lists them - a background agent can be doing real work worth
-reading. This is what makes the office line up with herdr's own agent sidebar,
-which shows one row per pane.
+workspace rail still lists them - a background agent can be doing real work
+worth reading. This is what makes the office line up with herdr's own agent
+sidebar, which shows one row per pane.
 
 ## Stack
 
