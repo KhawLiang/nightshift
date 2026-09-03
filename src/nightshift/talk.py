@@ -18,7 +18,8 @@ Usage:  nightshift talk            start and open a browser
 import glob, json, os, re, sys, time, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .core import collect, focus_pane, send_pane, send_key, screen_of, ago, PROJ, HOME
+from .core import (collect, focus_pane, send_pane, send_key, screen_of, mark_seen,
+                   ago, PROJ, HOME)
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 PAGE = os.path.join(HERE, "talk.html")
@@ -379,6 +380,19 @@ class TalkRoutes:
             err = send_pane(row["pane"], text, submit)
             self._json(400 if err else 200,
                        {"error": err} if err else {"ok": True, "submitted": submit})
+            return True
+        if path == "/api/talk/seen":                  # you have read this far
+            try:
+                d = json.loads(body or b"{}")
+            except Exception:
+                self._json(400, {"error": "bad body"})
+                return True
+            sid = d.get("sid") or ""
+            if not SID_RE.match(sid):
+                self._json(400, {"error": "bad session id"})
+                return True
+            err = mark_seen(sid)
+            self._json(500 if err else 200, {"error": err} if err else {"ok": True})
             return True
         if path == "/api/talk/upload":
             ext = IMG_TYPES.get((ctype or "").split(";")[0].strip())

@@ -12,7 +12,47 @@ SESS = os.path.join(HOME, ".claude", "sessions")
 PROJ = os.path.join(HOME, ".claude", "projects")
 
 RANK = dict(waiting=0, draft=1, idle=2, busy=3, unknown=4)
+SEEN = os.path.join(HOME, ".claude", "nightshift-seen.json")
+_seen = {"t": 0.0, "map": {}}
 PANE_RE = re.compile(r"^%\d+$")
+
+
+def seen_map():
+    """{sessionId: when you last looked at it, ms}. Claude Code has no notion of
+    read/unread, so this is ours: talk stamps a session when you open it, and the
+    office stamps one when you jump to its pane."""
+    try:
+        m = os.path.getmtime(SEEN)
+    except OSError:
+        return _seen["map"] if _seen["t"] else {}
+    if m != _seen["t"]:
+        try:
+            with open(SEEN) as f:
+                _seen["map"] = {k: int(v) for k, v in json.load(f).items()}
+            _seen["t"] = m
+        except Exception:
+            pass
+    return _seen["map"]
+
+
+def mark_seen(sid, when=None):
+    """Remember that you have now read this far. '' on success, else why not."""
+    if not sid:
+        return "no session id"
+    m = dict(seen_map())
+    m[sid] = int(when or time.time() * 1000)
+    if len(m) > 400:                             # keep the newest few hundred
+        m = dict(sorted(m.items(), key=lambda kv: kv[1], reverse=True)[:400])
+    try:
+        os.makedirs(os.path.dirname(SEEN), exist_ok=True)
+        tmp = SEEN + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(m, f)
+        os.replace(tmp, SEEN)
+    except OSError as e:
+        return str(e)
+    _seen["map"], _seen["t"] = m, os.path.getmtime(SEEN)
+    return ""
 
 
 def alive(pid):
@@ -202,6 +242,9 @@ def collect():
             snip=snip,
             model=d.get("model") or "",
         ))
+    seen = seen_map()
+    for r in rows:                               # anything written since you looked
+        r["unread"] = bool(r["touched"]) and r["touched"] > seen.get(r["sid"], 0)
     rows.sort(key=lambda r: (RANK[r["state"]], r["name"]))
     return rows
 

@@ -23,6 +23,15 @@ R = "\033[0m"
 CLR = dict(waiting="\033[31m", draft="\033[35m", idle="\033[32m",
            busy="\033[33m", unknown="\033[90m")
 GLYPH = dict(waiting="!", draft="◆", idle="○", busy="●", unknown="·")
+# `busy` is what the registry calls it; "working" is what it looks like, and an
+# idle session with output you have not read yet reads as "unread"
+LABEL = dict(busy="working")
+
+
+def label(r):
+    if r.get("unread") and r["state"] in ("idle", "unknown"):
+        return "unread"
+    return LABEL.get(r["state"], r["state"])
 BOLD, GRY = "\033[1m", "\033[90m"
 
 
@@ -35,7 +44,7 @@ def render(rows, width):
         if len(cwd) > 26:
             cwd = "…" + cwd[-25:]
         out.append("%s%s %-22s %-8s%s %-9s %-26s %6s %6s" % (
-            c, GLYPH[r["state"]], r["name"][:22], r["state"], R,
+            c, GLYPH[r["state"]], r["name"][:22], label(r), R,
             r["where"][:9], cwd, r["age"], r["quiet_str"]))
         line = ("↳ unsent: " + r["draft"]) if r["draft"] else r["snip"]
         if line:
@@ -46,8 +55,9 @@ def render(rows, width):
     n = {k: sum(1 for r in rows if r["state"] == k) for k in RANK}
     need = n["waiting"] + n["draft"] + n["idle"]
     out.append("")
-    out.append("%s%d session(s) · %d busy · %d need you (%dw %dd %di) · %s%s" % (
-        GRY, len(rows), n["busy"], need, n["waiting"], n["draft"], n["idle"],
+    unread = sum(1 for r in rows if r.get("unread"))
+    out.append("%s%d session(s) · %d working · %d unread · %d need you (%dw %dd %di) · %s%s" % (
+        GRY, len(rows), n["busy"], unread, need, n["waiting"], n["draft"], n["idle"],
         time.strftime("%H:%M:%S"), R))
     return "\n".join(out)
 
@@ -65,7 +75,7 @@ def main():
         rows = rows_for(args)
         b = sum(1 for r in rows if r["state"] == "busy")
         w = sum(1 for r in rows if r["state"] in ("waiting", "draft"))
-        print("CC %d busy%s" % (b, (" !%d" % w) if w else ""))
+        print("CC %d working%s" % (b, (" !%d" % w) if w else ""))
         return
     iv = 2.0
     if "-n" in args:

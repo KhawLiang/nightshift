@@ -217,7 +217,8 @@ const C = {
   paper:"#e5e0d2", ink:"#14120f", shadow:"rgba(0,0,0,.26)",
   couch:"#7a5a52", couchHi:"#8f6b61", couchLo:"#5e453f",
   print:"#c9cfd2", printHi:"#e2e7e9", printLo:"#8f979b",
-  busy:"#ffb020", idle:"#3ddc97", wait:"#ff4757", draft:"#c77dff", unk:"#8b95a1"
+  busy:"#ffb020", idle:"#3ddc97", wait:"#ff4757", draft:"#c77dff", unk:"#8b95a1",
+  unread:"#5bc8ff"
 };
 const SKIN  = ["#eec09a","#d9a377","#b07d53","#8d5a3b","#f2d3b4","#6b4630"];
 const HAIR  = ["#2b241e","#5f3b22","#c9a227","#8c3b2e","#39557a","#7a4f7d","#d9d3c8","#43302a"];
@@ -1246,7 +1247,7 @@ function layout(hits, scale){
     p.style.left = (h.label.x/W*100) + "%";
     p.style.top  = (h.label.y/H*100) + "%";
     const spot = (a.where && a.where !== "-") ? (a.where.split(":")[1] || a.where) : a.name;
-    p.innerHTML = '<div class="nm" style="color:'+col+'">'+esc(a.state)+'</div>'
+    p.innerHTML = '<div class="nm" style="color:'+labelColor(a)+'">'+esc(stateLabel(a))+'</div>'
                 + '<div class="sub">'+esc(spot)+' &middot; '+esc(a.quiet_str)+'</div>';
     p.addEventListener("click", e=> (e.shiftKey||e.altKey) ? focusPane(a)
                                  : openTalk(a, e.metaKey || e.ctrlKey));
@@ -1263,12 +1264,22 @@ function splitName(name, leaf){
   if (!leaf || n === l || !n.startsWith(l)) return ["", name];
   return [name.slice(0, leaf.length), name.slice(leaf.length)];
 }
+/* `busy` is the registry's word; "working" is what it looks like. An idle
+   session holding output you have not opened yet reads as "unread". */
+function stateLabel(a){
+  if (a.unread && (a.state === "idle" || a.state === "unknown")) return "unread";
+  return a.state === "busy" ? "working" : a.state;
+}
+function labelColor(a){
+  return (a.unread && (a.state === "idle" || a.state === "unknown"))
+    ? C.unread : stateColor(a.state);
+}
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 function showTip(e,a){
   tip.innerHTML =
       '<div><b style="color:'+stateColor(a.state)+'">'+esc(a.name)+'</b></div>'
-    + '<div><span class="k">state </span>'+esc(a.state)+'  <span class="k">tmux </span>'+esc(a.where)+'</div>'
+    + '<div><span class="k">state </span>'+esc(stateLabel(a))+'  <span class="k">tmux </span>'+esc(a.where)+'</div>'
     + '<div><span class="k">cwd   </span>'+esc(a.cwd)+'</div>'
     + '<div><span class="k">up '+esc(a.age)+' &middot; quiet '+esc(a.quiet_str)+'</span></div>'
     + (a.draft ? '<span class="snip" style="color:'+C.draft+'">unsent: '+esc(a.draft)+'</span>'
@@ -1305,6 +1316,12 @@ function openTalk(a, newTab){
   location.href = url;
 }
 
+function markSeen(a){
+  if (!a || !a.sid) return;
+  fetch("/api/talk/seen", {method:"POST", headers:{"Content-Type":"application/json"},
+                           body: JSON.stringify({sid: a.sid})}).catch(()=>{});
+}
+
 async function focusPane(a){
   const sess = (a.where||"").split(":")[0];
   if (!a.pane) { toast(a.name + " isn't in tmux or herdr"); return; }
@@ -1313,6 +1330,7 @@ async function focusPane(a){
                                          body: JSON.stringify({pane:a.pane})});
     const j = await r.json();
     if (!r.ok) { toast("could not focus: " + (j.error||r.status)); return; }
+    markSeen(a);                                  // you looked: clear its unread
     if (a.mux !== "tmux") { toast(a.where + " focused"); return; }
     const cmd = "tmux attach -t " + sess;
     try { await navigator.clipboard.writeText(cmd); toast(a.where + " focused · copied “" + cmd + "”"); }
@@ -1339,10 +1357,14 @@ async function poll(){
 function counts(){
   const n = {}; for (const s of sessions) n[s.state] = (n[s.state]||0)+1;
   const need = (n.waiting||0)+(n.draft||0)+(n.idle||0);
-  const row = [["waiting",C.wait],["draft",C.draft],["idle",C.idle],["busy",C.busy]]
+  const unread = sessions.filter(s=> s.unread && (s.state === "idle" || s.state === "unknown")).length;
+  const row = [["waiting",C.wait,"waiting"],["draft",C.draft,"draft"],
+               ["idle",C.idle,"idle"],["busy",C.busy,"working"]]
     .filter(([k])=>n[k])
-    .map(([k,c])=>'<span class="cnt"><i class="swatch" style="background:'+c+'"></i><b>'+n[k]+'</b> '+k+'</span>')
-    .join("");
+    .map(([k,c,lbl])=>'<span class="cnt"><i class="swatch" style="background:'+c+'"></i><b>'+n[k]+'</b> '+lbl+'</span>')
+    .join("")
+    + (unread ? '<span class="cnt"><i class="swatch" style="background:'+C.unread+'"></i><b>'
+                + unread + '</b> unread</span>' : "");
   const worst = n.waiting ? C.wait : n.draft ? C.draft : n.idle ? C.idle
               : n.busy ? C.busy : C.unk;                 // what the room needs first
   document.getElementById("counts").innerHTML = row +
@@ -1401,12 +1423,13 @@ function drawNav(){
       const nm = splitName(a.name, home ? "" : leaf);
       const row = document.createElement("div");
       row.className = "row" + (a.sid && a.sid === lastRead ? " on" : "");
-      row.title = a.name + " \u2014 " + a.state;
-      row.innerHTML = '<i class="dot'+(bg?" bg":"")+'" style="background:'+col+';color:'+col+'"></i>'
+      row.title = a.name + " \u2014 " + stateLabel(a);
+      const rc = labelColor(a);
+      row.innerHTML = '<i class="dot'+(bg?" bg":"")+'" style="background:'+rc+';color:'+rc+'"></i>'
                     + '<div class="txt"><div class="rn">'
                     + (nm[0] ? '<span class="pre">'+esc(nm[0])+'</span>' : '')
                     + esc(nm[1])+'</div>'
-                    + '<div class="rs">'+esc(a.state)+' &middot; '+esc(a.quiet_str)
+                    + '<div class="rs">'+esc(stateLabel(a))+' &middot; '+esc(a.quiet_str)
                     + (bg ? ' <span class="tag">bg</span>' : '')+'</div></div>';
       if (a.pane) {                                    // bg agents share a pane, so no jump
         const go = document.createElement("span");

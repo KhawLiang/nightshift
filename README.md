@@ -13,7 +13,7 @@ Three views, same registry:
   lists every running agent grouped by the directory it runs in, background
   agents included - they have no desk, so this is the only place they appear.
 - **`nightshift board`** — the same thing as a terminal table, sorted by "how
-  much does this one need you": waiting → draft → idle → busy.
+  much does this one need you": waiting → draft → idle → working.
 - **`nightshift talk`** — what they are actually *saying*, and a box to say
   something back. Every running session on the left grouped by workspace, its
   conversation on the right tailed as it is written, the pane's live screen and
@@ -67,6 +67,18 @@ message - a terminal cannot carry image bytes, but Claude Code can read a file.
 `/clear` does not end a session, it gives it a new id, so talk notices the pane's
 old conversation stopped and follows the new one instead of sitting there looking
 frozen.
+
+### read and unread
+
+Claude Code has no notion of read/unread, so nightshift keeps its own:
+`~/.claude/nightshift-seen.json`, one timestamp per session id. Opening a session
+in talk stamps it, so does watching output arrive while following, and so does
+clicking a person to focus their pane - all three mean "I have seen this".
+Anything written since then makes the session **unread**, and an idle session
+with unread output says so on its desk plate, in the rail, on the board and in
+the header count, in blue instead of green. Busy sessions say `working` rather
+than the registry's `busy`; a session actively typing is not something you are
+behind on.
 
 ## Install
 
@@ -145,7 +157,7 @@ Deliberately dependency-free.
 
 | Layer | What |
 | --- | --- |
-| Data | `~/.claude/sessions/<pid>.json`, written by Claude Code itself, plus `tmux capture-pane` (or herdr's `pane.read`) for unsubmitted drafts, plus the transcript `.jsonl` for the reader |
+| Data | `~/.claude/sessions/<pid>.json`, written by Claude Code itself, plus `tmux capture-pane` (or herdr's `pane.read`) for unsubmitted drafts, plus the transcript `.jsonl` for talk; the only file nightshift writes is `~/.claude/nightshift-seen.json` (read marks) and pasted images |
 | Server | `http.server.ThreadingHTTPServer`, stdlib, loopback only; the office also serves talk at `/talk` + `/api/talk/*` (`/read` and `/api/read/*` still answer) |
 | UI | two HTML files, canvas 2D, hand-rolled pixel renderer, no framework, no build step |
 
@@ -169,6 +181,7 @@ Everything the two servers answer. `nightshift` serves all of it on one port;
 | `GET` | `/api/talk/screen?sid=` | the last 14 lines that pane is showing |
 | `POST` | `/api/talk/send` | `{sid, text, submit, key, confirm}` - type into that pane |
 | `POST` | `/api/talk/upload` | raw image bytes in, a path on disk out |
+| `POST` | `/api/talk/seen` | `{sid}` - you have read this far, clear its unread |
 
 `/read` and `/api/read/*` still answer as aliases of `/talk` and `/api/talk/*`.
 Anything else is a 404.
