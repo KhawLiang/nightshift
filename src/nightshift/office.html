@@ -75,7 +75,13 @@
     border-left:3px solid var(--unk);            /* the group's worst state */
     padding:.3rem .4rem .32rem; margin-bottom:.5rem;
   }
-  .ws .wh { padding:0 .1rem .18rem; }
+  .ws .wh { padding:0 .1rem .18rem; cursor:pointer; border-radius:4px; }
+  .ws .wh:hover .wn { color:#ffffff; }
+  .ws .wh .car { color:var(--dim); font-size:8px; flex:0 0 auto;
+                 transition:transform .12s; transform:rotate(90deg); }
+  .ws.shut .wh .car { transform:rotate(0deg); }
+  .ws.shut .row, .ws.shut .more { display:none; }
+  #nav.compact .ws.shut .row { display:flex; }   /* dots are all a strip has */
   .ws .wh .wp { font-size:9px; color:var(--dim); overflow:hidden;
                 text-overflow:ellipsis; white-space:nowrap; }
   .ws .wh .wtop { display:flex; align-items:center; gap:.35rem; }
@@ -1402,6 +1408,8 @@ const BG_STALE = 3600 * 1000;
 const staleBg = a => a.kind === "bg" && a.state === "idle" &&
                      (a.quiet || 0) * 1000 > BG_STALE;
 let bgOpen = {};                                  /* workspaces you unfolded */
+let wsShut = {};                                  /* workspaces you collapsed */
+try { wsShut = JSON.parse(localStorage.getItem("nightshift.ws") || "{}"); } catch (e) {}
 
 function wsGroups(){
   const by = new Map();
@@ -1420,7 +1428,8 @@ function wsGroups(){
 }
 function drawNav(){
   const groups = wsGroups();
-  const key = groups.map(g=> g.path + ":" + (bgOpen[g.path] ? "+" : "") + g.list.map(a=>
+  const key = groups.map(g=> g.path + ":" + (bgOpen[g.path] ? "+" : "")
+    + (wsShut[g.path] ? "-" : "") + g.list.map(a=>
     a.name+a.state+a.quiet_str+a.kind+(a.watching?"@":"")+(a.sid===lastRead?"*":"")
   ).join(",")).join("|");
   if (key === navCache) return;
@@ -1443,9 +1452,16 @@ function drawNav(){
     const head = document.createElement("div");
     head.className = "wh";
     head.innerHTML = (parent ? '<div class="wp">'+esc(parent)+'</div>' : '')
-                   + '<div class="wtop"><span class="wn">'+esc(leaf)+'</span>'
+                   + '<div class="wtop"><span class="car">&#9656;</span>'
+                   + '<span class="wn">'+esc(leaf)+'</span>'
                    + '<span class="wc"><i class="dot" style="background:'+worstCol+'"></i>'
                    + g.list.length+'</span></div>';
+    head.addEventListener("click", ()=>{                    // fold a workspace away
+      if (wsShut[g.path]) delete wsShut[g.path]; else wsShut[g.path] = 1;
+      try { localStorage.setItem("nightshift.ws", JSON.stringify(wsShut)); } catch (e) {}
+      navCache = ""; drawNav();
+    });
+    if (wsShut[g.path]) box.classList.add("shut");
     box.appendChild(head);
     const stale = bgOpen[g.path] ? [] : g.list.filter(staleBg);
     for (const a of g.list) {

@@ -40,7 +40,9 @@ In the office: **click a person** to `tmux select-window` + `select-pane` onto
 their pane (hovering lights them up and puts a reticle round them), **click
 their desk** to open that conversation in talk. `n` toggles the workspace rail
 between full and a strip of dots, `f` toggles fullscreen, `r` (or the header's
-`talk →`) opens talk. The rail works like the room does: a row focuses that
+`talk →`) opens talk. Clicking a workspace name in the rail collapses that
+group, remembered across reloads; in compact mode the dots stay, since a strip
+of dots is all there is. The rail works like the room does: a row focuses that
 pane, its `≡` opens the conversation, and shift-click does the same - a
 background agent has no pane of its own, so its row just opens the conversation.
 
