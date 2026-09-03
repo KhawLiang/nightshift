@@ -214,10 +214,10 @@ def probe(path):
     return out
 
 
-def sessions(at_terminal=True):
+def sessions():
     """Live sessions from the registry, then recent transcripts that have ended."""
     rows, seen = [], set()
-    for r in collect(at_terminal):
+    for r in collect():
         path = os.path.join(PROJ, "*", (r["sid"] or "-") + ".jsonl")
         hits = glob.glob(path)
         if r["sid"]:
@@ -301,8 +301,7 @@ class TalkRoutes:
                 self._send(500, "cannot read %s: %s" % (PAGE, e), "text/plain")
             return True
         if path == "/api/talk/sessions":
-            self._json(200, {"now": int(time.time() * 1000),
-                             "sessions": sessions(q.get("here") != "1")})
+            self._json(200, {"now": int(time.time() * 1000), "sessions": sessions()})
             return True
         if path == "/api/talk/transcript":
             sid = q.get("sid", "")
