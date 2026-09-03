@@ -1,4 +1,4 @@
-"""Shared session-discovery for the terminal board and the pixel office.
+"""Shared session-discovery for the pixel office and talk.
 
 Everything comes from the registry Claude Code maintains at ~/.claude/sessions/,
 plus a peek at each tmux pane for input typed but never submitted.

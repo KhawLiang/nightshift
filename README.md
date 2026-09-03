@@ -6,19 +6,17 @@ at it and know who is working and who is waiting on you - and when you want to
 know *what* one of them is doing, `nightshift talk` shows the conversation -
 and lets you answer it.
 
-Three views, same registry:
+Two views, same registry:
 
 - **`nightshift`** — the office, in a browser. Click a person to jump to that
   pane, click their desk to read the conversation. A rail down the left side
   lists every running agent grouped by the directory it runs in, background
   agents included - they have no desk, so this is the only place they appear.
-- **`nightshift board`** — the same thing as a terminal table, sorted by "how
-  much does this one need you": waiting → draft → idle → working.
 - **`nightshift talk`** — what they are actually *saying*, and a box to say
   something back. Every running session on the left grouped by workspace, its
   conversation on the right tailed as it is written, the pane's live screen and
   a compose box at the bottom. The office serves it too, at `/talk`, so one
-  command gives you both. (It used to be `nightshift read`; that still works.)
+  command gives you both.
 
 ## Run
 
@@ -27,17 +25,11 @@ nightshift                 # serve 127.0.0.1:8787 and open a browser
 nightshift --port 9000
 nightshift --no-open
 
-nightshift board           # live, refresh every 2s
-nightshift board --once
-nightshift board -n 5
-nightshift board --brief   # one line, for tmux status-right
-nightshift board --all     # include background agents
-
-nightshift herdr           # what the herdr backend sees, when it misbehaves
-
 nightshift talk            # talk on its own, 127.0.0.1:8788
 nightshift talk --port 9001
-nightshift talk --no-open  # `nightshift read` is the old name, still accepted
+nightshift talk --no-open
+
+nightshift herdr           # what the herdr backend sees, when it misbehaves
 ```
 
 Nothing has to be switched on to record a session: Claude Code writes every
@@ -78,8 +70,8 @@ focused in herdr, since a pane you are looking at is not one you are behind on
 (`pane.current` names the focused pane and the agent session in it; the stamp is
 written when the focus moves or every 30s, not on every poll).
 Anything written since then makes the session **unread**, and an idle session
-with unread output says so on its desk plate, in the rail, on the board and in
-the header count, in blue instead of green. The session whose pane you have
+with unread output says so on its desk plate, in the rail and in the header
+count, in blue instead of green. The session whose pane you have
 focused right now says **viewing** instead, in white, with a soft glow and a
 faint reticle on its desk - that one is you. Busy sessions say `working` rather
 than the registry's `busy`; a session actively typing is not something you are
@@ -156,10 +148,9 @@ Past an hour idle they fold into one `+2 idle bg` line per workspace in the rail
 which opens on click. To end one, its registry filename is its pid:
 `kill $(basename ~/.claude/sessions/31048.json .json)`.
 
-For the same reason they get no desk in the office and no row on the board:
-Claude Code keeps spare ones warm, they have no prompt of their own, and there
-is nothing to click through to. `nightshift board --all` shows them, and the
-workspace rail still lists them - a background agent can be doing real work
+For the same reason they get no desk in the office: Claude Code keeps spare ones
+warm, they have no prompt of their own, and there is nothing to click through to.
+The workspace rail still lists them - a background agent can be doing real work
 worth reading. This is what makes the office line up with herdr's own agent
 sidebar, which shows one row per pane.
 
@@ -170,7 +161,7 @@ Deliberately dependency-free.
 | Layer | What |
 | --- | --- |
 | Data | `~/.claude/sessions/<pid>.json`, written by Claude Code itself, plus `tmux capture-pane` (or herdr's `pane.read`) for unsubmitted drafts, plus the transcript `.jsonl` for talk; the only file nightshift writes is `~/.claude/nightshift-seen.json` (read marks) and pasted images |
-| Server | `http.server.ThreadingHTTPServer`, stdlib, loopback only; the office also serves talk at `/talk` + `/api/talk/*` (`/read` and `/api/read/*` still answer) |
+| Server | `http.server.ThreadingHTTPServer`, stdlib, loopback only; the office also serves talk at `/talk` + `/api/talk/*` |
 | UI | two HTML files, canvas 2D, hand-rolled pixel renderer, no framework, no build step |
 
 `office.html` and `talk.html` are re-read on every request, so editing one and
@@ -195,17 +186,15 @@ Everything the two servers answer. `nightshift` serves all of it on one port;
 | `POST` | `/api/talk/upload` | raw image bytes in, a path on disk out |
 | `POST` | `/api/talk/seen` | `{sid}` - you have read this far, clear its unread |
 
-`/read` and `/api/read/*` still answer as aliases of `/talk` and `/api/talk/*`.
 Anything else is a 404.
 
 ## Layout
 
 ```
 src/nightshift/
-  cli.py            entry point: office, or `board` / `talk`
-  core.py           session discovery, shared by all three views
+  cli.py            entry point: the office, or `talk` / `herdr`
+  core.py           session discovery, shared by both views
   office.py         HTTP server + /api/sessions + /api/focus
-  fleet.py          terminal renderer
   talk.py           transcript parser + the /talk routes both servers wear
   herdr.py          herdr backend, for sessions that are not in tmux
   office.html       the animation, the workspace rail

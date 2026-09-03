@@ -13,7 +13,7 @@ what was appended since.
 
 Usage:  nightshift talk            start and open a browser
         nightshift talk --port 9000
-        nightshift talk --no-open   (`nightshift read` still works)
+        nightshift talk --no-open
 """
 import glob, json, os, re, sys, time, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -245,20 +245,10 @@ def sessions():
     return rows
 
 
-ALIASES = {"/read": "/talk", "/read/": "/talk/"}
 IMG_TYPES = {"image/png": "png", "image/jpeg": "jpg",
              "image/gif": "gif", "image/webp": "webp"}
 UPLOAD_CAP = 10 * 1024 * 1024
 PASTE_DIR = os.path.join(HOME, ".claude", "nightshift-paste")
-
-
-def _alias(path):
-    """/read is what /talk used to be called; old tabs and links keep working."""
-    if path in ALIASES:
-        return ALIASES[path]
-    if path.startswith("/api/read/"):
-        return "/api/talk/" + path[len("/api/read/"):]
-    return path
 
 
 def _row_for(sid):
@@ -297,13 +287,12 @@ class TalkRoutes:
     """Talk's routes, mixed into both servers.
 
     The office and talk are two views of the same registry, so `nightshift`
-    serves both on one port: the office at /, talk at /talk (/read still works,
-    it is what this page used to be called). Namespaced under /api/talk/ because
+    serves both on one port: the office at /, talk at /talk. Namespaced under
+    /api/talk/ because
     the office's own /api/sessions must keep returning live sessions only - the
     talk list also carries ended ones, and those have no desk to sit at."""
 
     def talk_get(self, path, q):
-        path = _alias(path)
         if path in ("/talk", "/talk/"):
             try:
                 with open(PAGE, "rb") as f:      # re-read so edits are live
@@ -350,7 +339,6 @@ class TalkRoutes:
 
     def talk_post(self, path, body, ctype=""):
         """POST routes. `body` is raw bytes - JSON for send, image bytes for upload."""
-        path = _alias(path)
         if path == "/api/talk/send":
             try:
                 d = json.loads(body or b"{}")

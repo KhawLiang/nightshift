@@ -1,7 +1,7 @@
 {
   "name": "nightshift",
   "version": "0.3.0",
-  "description": "A pixel office, a status board and a live transcript reader for every Claude Code session on this Mac",
+  "description": "A pixel office and a live conversation view for every Claude Code session on this Mac",
   "bin": {
     "nightshift": "bin/nightshift.js"
   },
