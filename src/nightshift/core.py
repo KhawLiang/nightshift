@@ -3,7 +3,7 @@
 Everything comes from the registry Claude Code maintains at ~/.claude/sessions/,
 plus a peek at each tmux pane for input typed but never submitted.
 """
-import json, os, re, time, glob, subprocess
+import calendar, json, os, re, shlex, time, glob, subprocess
 
 from . import herdr
 
@@ -14,7 +14,6 @@ PROJ = os.path.join(HOME, ".claude", "projects")
 RANK = dict(waiting=0, draft=1, idle=2, busy=3, unknown=4)
 SEEN = os.path.join(HOME, ".claude", "nightshift-seen.json")
 _seen = {"t": 0.0, "map": {}}
-_focus = {"sid": "", "t": 0.0}
 PANE_RE = re.compile(r"^%\d+$")
 
 
@@ -56,6 +55,42 @@ def mark_seen(sid, when=None):
     return ""
 
 
+_inst = {"key": None, "v": ""}
+VER_RE = re.compile(r"(\d+)\.(\d+)\.(\d+)")
+
+
+def installed():
+    """The Claude Code version a restart would run: what `claude` resolves to
+    now. The native installer keeps one file per version and points `claude` at
+    the newest, so its name is the answer; otherwise ask it, once per change."""
+    import shutil
+    cmd = shutil.which("claude") or os.path.join(HOME, ".local", "bin", "claude")
+    try:
+        real = os.path.realpath(cmd)
+        key = (real, os.path.getmtime(real))
+    except OSError:
+        return ""
+    if key == _inst["key"]:
+        return _inst["v"]
+    m = VER_RE.fullmatch(os.path.basename(real))
+    v = m.group(0) if m else ""
+    if not v:
+        try:
+            out = subprocess.run([real, "--version"], capture_output=True, timeout=5)
+            m = VER_RE.search(out.stdout.decode("utf-8", "replace"))
+            v = m.group(0) if m else ""
+        except Exception:
+            v = ""
+    _inst["key"], _inst["v"] = key, v
+    return v
+
+
+def _older(a, b):
+    """Is version a older than version b?"""
+    pa, pb = VER_RE.search(a or ""), VER_RE.search(b or "")
+    return bool(pa and pb) and tuple(map(int, pa.groups())) < tuple(map(int, pb.groups()))
+
+
 def alive(pid):
     try:
         os.kill(pid, 0)
@@ -93,8 +128,22 @@ def transcript_path(sid):
 _tcache = {}
 
 
+def _ms(stamp):
+    """ISO-8601 'Z' timestamp -> epoch ms, or 0."""
+    try:
+        sec = calendar.timegm(time.strptime(stamp[:19], "%Y-%m-%dT%H:%M:%S"))
+        frac = stamp[20:23] if stamp[19:20] == "." else ""
+        return sec * 1000 + (int(frac.ljust(3, "0")) if frac.isdigit() else 0)
+    except Exception:
+        return 0
+
+
 def transcript(sid):
-    """(mtime, last-activity-snippet) for a session, cached on mtime."""
+    """(last-message ms, last-activity-snippet) for a session, cached on mtime.
+
+    Not the file's mtime: Claude Code rewrites its trailing metadata (title,
+    mode, last prompt) on transcripts that have been idle for days, which would
+    make every session look freshly written - and so unread - at once."""
     if not sid:
         return (0, "")
     p = transcript_path(sid)
@@ -106,8 +155,8 @@ def transcript(sid):
         return (0, "")
     c = _tcache.get(p)
     if c and c[0] == m:
-        return (m, c[1])
-    txt = ""
+        return (c[2], c[1])
+    txt, last = "", 0
     try:
         with open(p, "rb") as f:
             f.seek(0, 2)
@@ -118,6 +167,8 @@ def transcript(sid):
                 o = json.loads(ln)
             except Exception:
                 continue
+            if not last and o.get("type") in ("user", "assistant"):
+                last = _ms(o.get("timestamp") or "")
             msg = o.get("message") or {}
             role = msg.get("role") or o.get("type")
             cont = msg.get("content")
@@ -140,8 +191,9 @@ def transcript(sid):
                 break
     except Exception:
         pass
-    _tcache[p] = (m, txt)
-    return (m, txt)
+    last = last or int(m * 1000)                 # no message in the tail window
+    _tcache[p] = (m, txt, last)
+    return (last, txt)
 
 
 def pane_id(tmux):
@@ -151,13 +203,46 @@ def pane_id(tmux):
     return tmux.rsplit(".", 1)[-1]
 
 
+ESC_RE = re.compile(r"\x1b\[([0-9;:?]*)([A-Za-z])|\x1b[^\[]")
+
+
+def _cells(line):
+    """[(char, dim)] for one captured line, escape codes read and dropped."""
+    out, dim, at = [], False, 0
+    for m in ESC_RE.finditer(line):
+        out += [(c, dim) for c in line[at:m.start()]]
+        at = m.end()
+        if m.group(2) != "m":                    # not a colour change
+            continue
+        ps = [int(p) if p.isdigit() else 0 for p in re.split("[;:]", m.group(1) or "0")]
+        i = 0
+        while i < len(ps):
+            p = ps[i]
+            if p in (38, 48, 58):                # 38;5;N and 38;2;R;G;B carry numbers
+                i += 3 if ps[i + 1:i + 2] == [5] else 5 if ps[i + 1:i + 2] == [2] else 1
+                continue
+            if p == 0 or p == 22:
+                dim = False
+            elif p == 2 or p == 90:              # faint, or the grey of bright-black
+                dim = True
+            i += 1
+    out += [(c, dim) for c in line[at:]]
+    return out
+
+
 def _draft_in(txt):
-    """The prompt line of a captured screen, if something is sitting in it."""
+    """The prompt line of a captured screen, if something you typed is sitting in
+    it. Read with its colours: when the box is empty Claude Code fills it with a
+    suggested next prompt, drawn faint, and that is not a draft - it is the
+    difference between `yes, update the promotion skill too` being yours or its."""
     for ln in reversed(txt.splitlines()[-30:]):
-        s = ln.strip()
+        cells = _cells(ln)
+        plain = "".join(c for c, _ in cells)
+        s = plain.lstrip()
         for mark in ("❯", ">"):
             if s.startswith(mark):
-                rest = s[len(mark):].strip()
+                start = len(plain) - len(s) + len(mark)
+                rest = "".join(c for c, dim in cells[start:] if not dim).strip()
                 return rest if rest and not rest.startswith("─") else ""
     return ""
 
@@ -167,8 +252,8 @@ def pane_draft(pane, mux="tmux"):
     if not pane:
         return ""
     if mux == "herdr":
-        return _draft_in(herdr.read(pane))
-    return _draft_in(_tmux("capture-pane", "-p", "-t", pane))
+        return _draft_in(herdr.read(pane, ansi=True))
+    return _draft_in(_tmux("capture-pane", "-p", "-e", "-t", pane))
 
 
 def where(tmux):
@@ -195,7 +280,7 @@ def where(tmux):
 
 
 def collect():
-    rows = []
+    rows, latest = [], installed()
     for f in glob.glob(os.path.join(SESS, "*.json")):
         try:
             d = json.load(open(f))
@@ -222,12 +307,13 @@ def collect():
             draft = pane_draft(pane, mux)
             if draft:
                 st = "draft"
-        tm, snip = transcript(d.get("sessionId", ""))
+        said, snip = transcript(d.get("sessionId", ""))
         touched = int(max(d.get("statusUpdatedAt") or 0,
-                          d.get("updatedAt") or 0, tm * 1000))
+                          d.get("updatedAt") or 0, said))
         rows.append(dict(
             name=d.get("name") or "?",
             sid=d.get("sessionId") or "",
+            pid=d.get("pid"),
             kind=kind,
             state=st,
             draft=draft,
@@ -242,23 +328,30 @@ def collect():
             quiet_str=ago(touched),
             snip=snip,
             model=d.get("model") or "",
+            # Claude Code updates itself on disk, but a running session keeps the
+            # version it started with until you restart it ("Restart to update")
+            version=d.get("version") or "",
+            update=latest if _older(d.get("version"), latest) else "",
         ))
     seen = seen_map()
-    for r in rows:                               # anything written since you looked
-        r["unread"] = bool(r["touched"]) and r["touched"] > seen.get(r["sid"], 0)
-    # the pane you have focused is one you are looking at, so it is never unread -
-    # stamped to disk when the focus moves, or once every half minute, not every poll
+    # herdr's focused pane says which pane it is, not that anyone is looking: herdr
+    # keeps one focused with no terminal attached, and cannot say whether one is.
+    # So it is only a marker for the office - it never counts as read.
     watching = herdr.current()[1] if herdr.available() else ""
     for r in rows:
         r["watching"] = bool(watching) and r["sid"] == watching
-    if watching:
-        for r in rows:
-            if r["watching"]:
-                r["unread"] = False
-        now = time.time()
-        if watching != _focus["sid"] or now - _focus["t"] > 30:
-            mark_seen(watching)
-            _focus["sid"], _focus["t"] = watching, now
+        r["unread"] = bool(r["touched"]) and r["touched"] > seen.get(r["sid"], 0)
+        # herdr keeps its own read mark, and keeps it while nightshift is not
+        # running: a pane that finished while you were elsewhere is `done` until
+        # you focus it, then `idle`. Our stamp only ever narrows that - opening a
+        # session in talk reads it too - otherwise every session you had read in
+        # the terminal would come back unread the next time nightshift starts.
+        # Not for the focused pane, though: herdr may count that one as looked at
+        # and never mark it `done`, so our stamp alone decides it.
+        if r["mux"] == "herdr" and not r["watching"]:
+            hs = herdr.status_of(r["pane"])
+            if hs in ("idle", "working", "blocked", "done"):
+                r["unread"] = r["unread"] and hs == "done"
     rows.sort(key=lambda r: (RANK[r["state"]], r["name"]))
     return rows
 
@@ -281,6 +374,7 @@ KEYS = {                                   # the only key presses we will ever s
     "enter":  ("enter",  "Enter"),
 }
 TEXT_CAP = 8192
+PASTE_SETTLE = 0.35         # seconds between typing a message and pressing Enter
 
 
 def _live_pane(pane):
@@ -304,8 +398,17 @@ def send_pane(pane, text="", submit=True):
     text = (text or "")[:TEXT_CAP]
     if not text and not submit:
         return ""
+    # Claude Code reads a burst of input as a paste, and an Enter inside that
+    # burst becomes a newline in the prompt - the message sits there as a draft.
+    # So the text goes first, and Enter only once it has settled.
     if row["mux"] == "herdr":
-        return herdr.send(pane, text, ["enter"] if submit else [])
+        if not (text and submit):
+            return herdr.send(pane, text, ["enter"] if submit else [])
+        err = herdr.send(pane, text)
+        if err:
+            return err
+        time.sleep(PASTE_SETTLE)
+        return herdr.send(pane, "", ["enter"])
     try:
         if text:
             # a buffer + bracketed paste, so a multi-line message stays one prompt
@@ -313,6 +416,8 @@ def send_pane(pane, text="", submit=True):
                            capture_output=True, timeout=2, check=True)
             subprocess.run(["tmux", "paste-buffer", "-b", "nightshift", "-d", "-p",
                             "-t", pane], capture_output=True, timeout=2, check=True)
+            if submit:
+                time.sleep(PASTE_SETTLE)
         if submit:
             subprocess.run(["tmux", "send-keys", "-t", pane, "Enter"],
                            capture_output=True, timeout=2, check=True)
@@ -333,6 +438,64 @@ def send_key(pane, key):
         return herdr.send(pane, "", [hk])
     try:
         subprocess.run(["tmux", "send-keys", "-t", pane, tk],
+                       capture_output=True, timeout=2, check=True)
+    except Exception as e:
+        return str(e)
+    return ""
+
+
+UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+
+
+def _pane_exists(pane, mux):
+    if mux == "herdr":
+        return any(p["id"] == pane for p in herdr.panes(force=True))
+    return _tmux("display", "-p", "-t", pane, "#{pane_id}").strip() == pane
+
+
+def restart(sid, wait=15.0):
+    """/exit a session and start it again on the Claude Code now installed,
+    carrying on the same conversation - what "Restart to update" asks of you,
+    without going to the terminal. '' on success, else why not.
+
+    `claude --resume <id>` rather than `--continue`: continue picks the newest
+    conversation in the folder, and several sessions often share one.
+    Only an idle session with an empty prompt is restarted: a working one would be
+    cut off, one waiting on you has a dialog that /exit would answer, and a draft
+    would have /exit typed onto the end of it."""
+    if not UUID_RE.match(sid or ""):
+        return "bad session id"
+    row = next((r for r in collect() if r["sid"] == sid), None)
+    if row is None:
+        return "that session is not running"
+    if row["kind"] != "interactive" or not row["pane"]:
+        return "that session has no pane of its own to restart in"
+    why = {"busy": "it is working - wait until it is idle",
+           "waiting": "it is waiting on you - answer it first",
+           "draft": "there is unsent text in its prompt - clear it first"}.get(row["state"])
+    if why or row["state"] != "idle":
+        return why or "its state is unknown - restart it from the terminal"
+    pane, mux, pid = row["pane"], row["mux"], row["pid"]
+    cwd = os.path.expanduser(row["cwd"] or "~")
+    err = send_pane(pane, "/exit", True)
+    if err:
+        return err
+    end = time.time() + wait
+    while alive(pid) and time.time() < end:
+        time.sleep(0.25)
+    if alive(pid):
+        return "it did not exit - it may be asking something, look at its terminal"
+    time.sleep(0.6)                              # let the shell draw its prompt
+    if not _pane_exists(pane, mux):
+        return "the pane closed when it exited - start it again from the terminal"
+    # typed at the pane's shell: the id is a checked UUID and the folder is quoted
+    cmd = "cd %s && claude --resume %s" % (shlex.quote(cwd), sid)
+    if mux == "herdr":
+        return herdr.send(pane, cmd, ["enter"])
+    try:
+        subprocess.run(["tmux", "send-keys", "-t", pane, "-l", cmd],
+                       capture_output=True, timeout=2, check=True)
+        subprocess.run(["tmux", "send-keys", "-t", pane, "Enter"],
                        capture_output=True, timeout=2, check=True)
     except Exception as e:
         return str(e)

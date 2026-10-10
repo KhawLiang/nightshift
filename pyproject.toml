@@ -17,4 +17,4 @@ nightshift = "nightshift.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-nightshift = ["*.html"]
+nightshift = ["*.html", "fonts/*.woff2", "fonts/OFL.txt"]
