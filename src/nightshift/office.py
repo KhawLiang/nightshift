@@ -64,7 +64,7 @@ class Handler(TalkRoutes, BaseHTTPRequestHandler):
     def do_POST(self):
         path = self.path.split("?")[0]
         n = int(self.headers.get("Content-Length") or 0)
-        raw = self.rfile.read(min(n, 11 * 1024 * 1024)) if n else b""
+        raw = self.rfile.read(min(n, 51 * 1024 * 1024)) if n else b""
         if self.talk_post(path, raw, self.headers.get("Content-Type", "")):
             return                               # /api/talk/send and /api/talk/upload
         if path != "/api/focus":

@@ -144,6 +144,8 @@
   .plate .nm { font-weight:700; font-size:11px; letter-spacing:.01em;
                text-shadow:0 1px 2px rgba(0,0,0,.75); }
   .plate .sub { font-size:9px; color:var(--dim); text-shadow:0 1px 2px rgba(0,0,0,.75); }
+  /* text does not shrink with the canvas: a label keeps to its own desk, cut short */
+  .plate .nm, .plate .sub { overflow:hidden; text-overflow:ellipsis; }
   .plate:hover .nm { text-decoration:underline; text-underline-offset:2px; }
 
   .roomtag {
@@ -151,8 +153,11 @@
     display:flex; align-items:center; gap:.45rem; pointer-events:none;
   }
   .roomtag .rn { font-weight:700; font-size:11px; letter-spacing:.08em;
-                 text-transform:uppercase; text-shadow:0 1px 2px rgba(0,0,0,.8); }
-  .roomtag .rc { font-size:9px; color:var(--dim); }
+                 text-transform:uppercase; text-shadow:0 1px 2px rgba(0,0,0,.8);
+                 min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  /* a sign keeps inside its room: the agent count gives way first, then the name */
+  .roomtag .rc { font-size:9px; color:var(--dim); min-width:0; overflow:hidden;
+                 flex-shrink:100; }
 
   .bubble {
     position:absolute; transform:translate(-50%,-100%);
@@ -1249,6 +1254,7 @@ function layout(hits, scale){
     sg.className = "roomtag";
     sg.style.left = ((r.x + r.w/2)/W*100) + "%";
     sg.style.top  = ((r.y + 11)/H*100) + "%";
+    sg.style.maxWidth = ((r.w - 14)/W*100) + "%";
     sg.innerHTML = '<span class="rn" style="color:'+r.urg+'">'+esc(r.key)+'</span>'
                  + '<span class="rc">'+r.members.length+(r.members.length>1?" agents":" agent")+'</span>';
     overlay.appendChild(sg);
@@ -1270,6 +1276,7 @@ function layout(hits, scale){
     p.className = "plate"; p.dataset.name = a.name;
     p.style.left = (h.label.x/W*100) + "%";
     p.style.top  = (h.label.y/H*100) + "%";
+    p.style.maxWidth = ((DW + ROOM.deskGap - 6)/W*100) + "%";
     const spot = (a.where && a.where !== "-") ? (a.where.split(":")[1] || a.where) : a.name;
     p.innerHTML = '<div class="nm" style="color:'+labelColor(a)+'">'+esc(stateLabel(a))+'</div>'
                 + '<div class="sub">'+esc(spot)+' &middot; '+esc(a.quiet_str)+'</div>';

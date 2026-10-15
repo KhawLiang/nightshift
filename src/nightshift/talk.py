@@ -18,11 +18,13 @@ Usage:  nightshift talk            start and open a browser
 import glob, json, os, re, sys, time, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .core import (collect, focus_pane, send_pane, send_key, screen_of, mark_seen,
+from .core import (collect, focus_pane, send_pane, send_key, screen_of, mark_seen, restart,
                    ago, PROJ, HOME)
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 PAGE = os.path.join(HERE, "talk.html")
+FONTS = os.path.join(HERE, "fonts")         # JetBrains Mono, OFL - see fonts/OFL.txt
+FONT_RE = re.compile(r"^/fonts/(jetbrains-mono-[a-z-]+\.woff2)$")
 
 SID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 TAG_RE = re.compile(r"<(system-reminder|local-command-caveat|local-command-stdout"
@@ -73,6 +75,28 @@ def events_from(lines):
         except Exception:
             continue
         t = o.get("type")
+        if t == "queue-operation":
+            # Typed while it was working: Claude Code holds the message in a queue
+            # (shown under its prompt) and writes it as a turn only once it is
+            # picked up. Every operation goes to the browser, background-task
+            # notifications included, so its copy of the queue stays in step.
+            op, txt = o.get("operation"), o.get("content")
+            txt = txt.strip()[:OUT_CAP] if isinstance(txt, str) else ""
+            if op in ("enqueue", "remove", "dequeue"):
+                ev.append(dict(k="queue", op=op, ts=o.get("timestamp") or "", text=txt,
+                               human=bool(txt) and not txt.startswith("<"),
+                               taken=o.get("reason") == "absorbed_mid_turn"))
+            continue
+        if t == "attachment":
+            a = o.get("attachment") or {}
+            origin = a.get("origin") or {}
+            if a.get("type") == "queued_command" and a.get("commandMode") == "prompt" \
+                    and isinstance(origin, dict) and origin.get("kind") == "human":
+                body = TAG_RE.sub("", a.get("prompt") or "").strip()
+                if body:                         # a message it took in mid-turn
+                    ev.append(dict(k="user", ts=a.get("timestamp") or o.get("timestamp") or "",
+                                   side=False, text=body, mid=True))
+            continue
         if t in SKIP_TYPES:
             continue
         ts = o.get("timestamp") or ""
@@ -214,6 +238,130 @@ def probe(path):
     return out
 
 
+# Claude Code hands its status line command the numbers it shows at the bottom
+# of the terminal - context used, the 5h and 7d limits, cost - as JSON on stdin,
+# and nowhere else. Three lines in ~/.claude/statusline-command.sh keep a copy per
+# session here (see the README), which is what lets talk show the same numbers.
+STATUS_DIR = os.path.join(HOME, ".claude", "nightshift-status")
+SETTINGS = os.path.join(HOME, ".claude", "settings.json")
+_scache, _ccache = {}, {}
+
+
+def _status_of(sid):
+    """(what the status line last got for this session, when) or ({}, 0)."""
+    p = os.path.join(STATUS_DIR, sid + ".json")
+    try:
+        m = os.path.getmtime(p)
+    except OSError:
+        return {}, 0
+    hit = _scache.get(p)
+    if hit and hit[0] == m:
+        return hit[1], m
+    try:
+        with open(p) as f:
+            d = json.load(f)
+    except Exception:
+        d = {}
+    _scache[p] = (m, d if isinstance(d, dict) else {})
+    return _scache[p][1], m
+
+
+def _context_from(path):
+    """(tokens in context, model id) from the newest main-thread reply's usage -
+    the fallback for a session whose status line has not run since we started
+    keeping copies. Cached on mtime."""
+    try:
+        m = os.path.getmtime(path)
+    except OSError:
+        return 0, ""
+    hit = _ccache.get(path)
+    if hit and hit[0] == m:
+        return hit[1]
+    out = (0, "")
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 524288))
+            lines = f.read().decode("utf-8", "replace").splitlines()
+        for ln in reversed(lines):
+            if '"compact_boundary"' in ln:       # compacted since its last reply: the
+                break                            # count before it no longer applies
+            if '"usage"' not in ln:
+                continue
+            try:
+                o = json.loads(ln)
+            except ValueError:
+                continue
+            msg = o.get("message") or {}
+            u = msg.get("usage") or {}
+            if o.get("type") != "assistant" or o.get("isSidechain") or not u \
+                    or msg.get("model") == "<synthetic>":
+                continue
+            out = (sum(u.get(k) or 0 for k in ("input_tokens", "cache_creation_input_tokens",
+                                                "cache_read_input_tokens")),
+                   msg.get("model") or "")
+            break
+    except OSError:
+        pass
+    _ccache[path] = (m, out)
+    return out
+
+
+def _default_1m():
+    try:
+        with open(SETTINGS) as f:
+            return "[1m]" in (json.load(f).get("model") or "")
+    except Exception:
+        return False
+
+
+def usage(sid, path):
+    """This session's context and cost, the way its status line shows them."""
+    d, m = _status_of(sid)
+    cw = d.get("context_window") or {}
+    if cw.get("used_percentage") is not None:
+        cu = cw.get("current_usage") or {}
+        used = cw.get("total_input_tokens") or sum(
+            cu.get(k) or 0 for k in ("input_tokens", "cache_creation_input_tokens",
+                                     "cache_read_input_tokens"))
+        return dict(src="statusline", at=int(m * 1000), pct=cw["used_percentage"],
+                    used=used, size=cw.get("context_window_size") or 0,
+                    model=(d.get("model") or {}).get("display_name") or "",
+                    cost=(d.get("cost") or {}).get("total_cost_usd"),
+                    effort=(d.get("effort") or {}).get("level") or "")
+    if not path:
+        return None
+    tok, model = _context_from(path)
+    if not tok:
+        return None
+    # the transcript does not say which window the model had - [1m] is dropped
+    size = 1_000_000 if tok > 200_000 or _default_1m() else 200_000
+    return dict(src="transcript", at=0, pct=round(tok * 100.0 / size), used=tok,
+                size=size, model=model, cost=None, effort="")
+
+
+def limits():
+    """The 5h and 7d limits are the account's, not a session's: take them from
+    whichever status line ran last. Copies untouched for two weeks are dropped."""
+    best, when = {}, 0
+    cutoff = time.time() - 14 * 86400
+    for p in glob.glob(os.path.join(STATUS_DIR, "*.json")):
+        sid = os.path.basename(p)[:-5]
+        d, m = _status_of(sid)
+        if m and m < cutoff:
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+            continue
+        if m > when and d.get("rate_limits"):
+            best, when = d["rate_limits"], m
+    pick = lambda k: {"pct": (best.get(k) or {}).get("used_percentage"),
+                      "resets": (best.get(k) or {}).get("resets_at")} if best.get(k) else None
+    return dict(at=int(when * 1000), five=pick("five_hour"), week=pick("seven_day")) \
+        if best else None
+
+
 def sessions():
     """Live sessions from the registry, then recent transcripts that have ended."""
     rows, seen = [], set()
@@ -223,7 +371,8 @@ def sessions():
         if r["sid"]:
             seen.add(r["sid"])
         title, _ = probe(hits[0]) if hits else ("", "")
-        rows.append(dict(r, live=True, title=title, has=bool(hits)))
+        rows.append(dict(r, live=True, title=title, has=bool(hits),
+                         usage=usage(r["sid"], hits[0] if hits else "") if r["sid"] else None))
     ended = []
     for p in glob.glob(os.path.join(PROJ, "*", "*.jsonl")):
         sid = os.path.basename(p)[:-6]
@@ -245,9 +394,100 @@ def sessions():
     return rows
 
 
+# Claude Code's own slash commands, checked against 2.1.283. The transcript never
+# lists these - only skills - so they are kept by hand. `ui` = opens a panel in
+# the pane rather than printing, so talk opens the terminal view to show it.
+BUILTINS = [
+    ("add-dir", "Add a new working directory", 0),
+    ("artifacts", "Browse your published and shared artifacts", 1),
+    ("branch", "Create a branch of the current conversation at this point", 0),
+    ("btw", "Ask a quick side question without interrupting the main conversation", 0),
+    ("clear", "Start a new session with empty context; the old one stays resumable", 0),
+    ("compact", "Free up context by summarizing the conversation so far", 0),
+    ("config", "Open settings", 1),
+    ("context", "Visualize current context usage as a colored grid", 0),
+    ("copy", "Copy Claude's last response to clipboard (or /copy N for the Nth-latest)", 0),
+    ("doctor", "Check the health of this Claude Code install", 1),
+    ("effort", "Set effort level for model usage", 1),
+    ("exit", "Exit Claude Code - this ends the session", 0),
+    ("export", "Export the current conversation to a file or clipboard", 1),
+    ("fast", "Toggle fast mode", 0),
+    ("help", "Show help and available commands", 1),
+    ("hooks", "View hook configurations for tool events", 1),
+    ("ide", "Manage IDE integrations and show status", 1),
+    ("init", "Initialize a CLAUDE.md file with codebase documentation", 0),
+    ("loops", "List, create, and delete loops", 1),
+    ("mcp", "Manage MCP servers", 1),
+    ("memory", "Edit CLAUDE.md files and memory settings", 1),
+    ("model", "Set the AI model for Claude Code", 1),
+    ("output-style", "List output styles or switch to one", 1),
+    ("permissions", "Manage allow and deny tool permission rules", 1),
+    ("plan", "Enable plan mode or view the current session plan", 0),
+    ("plugin", "Manage Claude Code plugins", 1),
+    ("recap", "Generate a one-line session recap now", 0),
+    ("release-notes", "Show what changed in recent versions", 1),
+    ("reload-plugins", "Activate pending plugin changes in the current session", 0),
+    ("reload-skills", "Pick up skills added or changed on disk during this session", 0),
+    ("resume", "Resume a previous conversation", 1),
+    ("rewind", "Rewind the conversation and code to an earlier point", 1),
+    ("skills", "List available skills", 1),
+    ("status", "Show version, model, account, API connectivity and tool statuses", 1),
+    ("tasks", "View and manage everything running in the background", 1),
+    ("theme", "Change the theme", 1),
+    ("todos", "Show the current todo list", 0),
+    ("usage", "Show session cost, plan usage, and activity stats", 1),
+]
+_cmds = {}                  # transcript path -> [offset scanned to, skill rows]
+
+
+def commands(sid):
+    """What `/` can complete to in this session: the built-ins, then the skills
+    and custom commands Claude Code listed for it. That list is a `skill_listing`
+    attachment in the transcript - the exact set the session loaded, plugin and
+    project skills included - and a later one (after /reload-skills) replaces
+    it. Scanned incrementally, since it can sit a megabyte into the file."""
+    out = [dict(name=n, desc=d, kind="built-in", ui=bool(u)) for n, d, u in BUILTINS]
+    hits = glob.glob(os.path.join(PROJ, "*", sid + ".jsonl")) if SID_RE.match(sid or "") else []
+    if not hits:
+        return out
+    path = hits[0]
+    off, rows = _cmds.get(path, [0, []])
+    try:
+        if os.path.getsize(path) < off:          # rewritten under us: start over
+            off, rows = 0, []
+        with open(path, "rb") as f:
+            f.seek(off)
+            for ln in f:
+                if not ln.endswith(b"\n"):       # half-written line: next time
+                    break
+                off += len(ln)
+                if b'"skill_listing"' not in ln:
+                    continue
+                try:
+                    a = json.loads(ln).get("attachment") or {}
+                except ValueError:
+                    continue
+                if a.get("type") != "skill_listing":
+                    continue
+                rows = []
+                for item in (a.get("content") or "").splitlines():
+                    # "- codex:rescue: Delegate ..." - the name can hold colons too
+                    m = re.match(r"^- (\S+?)(?::\s+(.*))?:?$", item)
+                    if m:
+                        d = m.group(2) or ""
+                        rows.append(dict(name=m.group(1), kind="skill", ui=False,
+                                         desc=d if len(d) <= 300 else d[:299] + "\u2026"))
+    except OSError:
+        return out
+    _cmds[path] = [off, rows]
+    have = {c["name"] for c in out}
+    return out + [r for r in rows if r["name"] not in have]
+
+
 IMG_TYPES = {"image/png": "png", "image/jpeg": "jpg",
              "image/gif": "gif", "image/webp": "webp"}
-UPLOAD_CAP = 10 * 1024 * 1024
+UPLOAD_CAP = 50 * 1024 * 1024
+NAME_RE = re.compile(r"[^\w.\-()\[\]+@,]")      # no spaces: a path in a message stays one word
 PASTE_DIR = os.path.join(HOME, ".claude", "nightshift-paste")
 
 
@@ -261,9 +501,10 @@ def _row_for(sid):
     return None
 
 
-def _keep_image(data, ext):
-    """Park a pasted image on disk and return its path - a terminal cannot carry
-    image bytes, but Claude Code can read a file. Anything older than a week goes."""
+def _keep_image(data, ext, name=""):
+    """Park a pasted image or file on disk and return its path - a terminal cannot
+    carry bytes, but Claude Code can read a file. A file keeps its own name behind
+    the timestamp; a screenshot has none worth keeping. Older than a week goes."""
     os.makedirs(PASTE_DIR, exist_ok=True)
     cutoff = time.time() - 7 * 86400
     for old in glob.glob(os.path.join(PASTE_DIR, "*")):
@@ -273,10 +514,13 @@ def _keep_image(data, ext):
         except OSError:
             pass
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    path = os.path.join(PASTE_DIR, "%s.%s" % (stamp, ext))
+    base = "%s-%s" % (stamp, name) if name else "%s.%s" % (stamp, ext)
+    path = os.path.join(PASTE_DIR, base)
     n = 1
     while os.path.exists(path):
-        path = os.path.join(PASTE_DIR, "%s-%d.%s" % (stamp, n, ext))
+        stem, dot, tail = base.rpartition(".")
+        path = os.path.join(PASTE_DIR, "%s-%d.%s" % (stem, n, tail) if dot
+                            else "%s-%d" % (base, n))
         n += 1
     with open(path, "wb") as f:
         f.write(data)
@@ -300,8 +544,17 @@ class TalkRoutes:
             except OSError as e:
                 self._send(500, "cannot read %s: %s" % (PAGE, e), "text/plain")
             return True
+        m = FONT_RE.match(path)                  # bundled, so talk works offline
+        if m:
+            try:
+                with open(os.path.join(FONTS, m.group(1)), "rb") as f:
+                    self._send(200, f.read(), "font/woff2")
+            except OSError:
+                self._send(404, "no such font", "text/plain")
+            return True
         if path == "/api/talk/sessions":
-            self._json(200, {"now": int(time.time() * 1000), "sessions": sessions()})
+            self._json(200, {"now": int(time.time() * 1000), "sessions": sessions(),
+                             "limits": limits()})
             return True
         if path == "/api/talk/transcript":
             sid = q.get("sid", "")
@@ -326,6 +579,9 @@ class TalkRoutes:
             title, cwd = probe(hits[0])
             self._json(200, dict(events=ev, next=nxt, size=size, trimmed=trimmed,
                                  reset=reset, title=title, cwd=cwd))
+            return True
+        if path == "/api/talk/commands":              # what `/` completes to
+            self._json(200, {"commands": commands(q.get("sid", ""))})
             return True
         if path == "/api/talk/screen":                # what that pane shows now
             row = _row_for(q.get("sid", ""))
@@ -362,12 +618,35 @@ class TalkRoutes:
             # a session that is blocked on a prompt may have a dialog on screen, and
             # Enter would answer it - so the first press only types, and committing
             # takes a second, deliberate one.
+            # Decided here, on the state as it is now - the page's copy can be a
+            # poll old, and a stale "waiting" there left messages typed but unsent.
             if submit and row["state"] == "waiting" and not d.get("confirm"):
-                self._json(409, {"error": "waiting", "state": "waiting"})
-                return True
+                if not text:
+                    self._json(409, {"error": "waiting", "state": "waiting"})
+                    return True
+                submit = False
             err = send_pane(row["pane"], text, submit)
             self._json(400 if err else 200,
                        {"error": err} if err else {"ok": True, "submitted": submit})
+            return True
+        if path == "/api/talk/answer":                # a question Claude asked
+            from . import ask
+            try:
+                d = json.loads(body or b"{}")
+            except Exception:
+                self._json(400, {"error": "bad body"})
+                return True
+            err = ask.answer(d.get("sid") or "", d.get("id") or "", d.get("picks"))
+            self._json(409 if err else 200, {"error": err} if err else {"ok": True})
+            return True
+        if path == "/api/talk/restart":               # "Restart to update", from here
+            try:
+                d = json.loads(body or b"{}")
+            except Exception:
+                self._json(400, {"error": "bad body"})
+                return True
+            err = restart(d.get("sid") or "")
+            self._json(409 if err else 200, {"error": err} if err else {"ok": True})
             return True
         if path == "/api/talk/seen":                  # you have read this far
             try:
@@ -383,15 +662,21 @@ class TalkRoutes:
             self._json(500 if err else 200, {"error": err} if err else {"ok": True})
             return True
         if path == "/api/talk/upload":
+            # the browser never hands over a file's real path, so it comes as bytes
+            # plus the name it had; a clipboard screenshot is just "image.png"
+            from urllib.parse import unquote
+            name = NAME_RE.sub("_", os.path.basename(unquote(
+                self.headers.get("X-Filename") or ""))).lstrip(".")[-120:]
             ext = IMG_TYPES.get((ctype or "").split(";")[0].strip())
-            if not ext:
-                self._json(415, {"error": "only png, jpeg, gif or webp"})
-                return True
+            if re.fullmatch(r"image\.(png|jpe?g|gif|webp)", name or "", re.I):
+                name = ""
+            if not ext and not name:
+                name = "paste.bin"
             if len(body) > UPLOAD_CAP:
-                self._json(413, {"error": "image over 10 MB"})
+                self._json(413, {"error": "over 50 MB"})
                 return True
             try:
-                path_ = _keep_image(body, ext)
+                path_ = _keep_image(body, ext or "bin", name)
             except OSError as e:
                 self._json(500, {"error": str(e)})
                 return True

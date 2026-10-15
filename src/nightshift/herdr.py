@@ -88,7 +88,7 @@ def _labels():
 
 
 def panes(force=False):
-    """[{id, spot, pids}] for every herdr pane, cached for TTL seconds."""
+    """[{id, spot, pids, status}] for every herdr pane, cached for TTL seconds."""
     now = time.time()
     if not force and now - _state["t"] < TTL:
         return _state["panes"]
@@ -111,7 +111,8 @@ def panes(force=False):
             for fg in info.get("foreground_processes") or []:
                 if isinstance(fg, dict) and isinstance(fg.get("pid"), int):
                     pids.add(fg["pid"])
-            found.append({"id": pid_, "spot": spot, "pids": pids})
+            found.append({"id": pid_, "spot": spot, "pids": pids,
+                          "status": p.get("agent_status") or ""})
     _state["t"], _state["panes"] = now, found
     return found
 
@@ -145,12 +146,23 @@ def pane_for(pid):
     return ("", "")
 
 
-def read(pane, lines=30):
-    """The pane's visible screen, in place of `tmux capture-pane -p`."""
+def status_of(pane):
+    """herdr's agent status for a pane: idle, working, blocked, done (finished
+    while you were looking elsewhere - herdr's unread), unknown, or ''."""
+    for p in panes():
+        if p["id"] == pane:
+            return p["status"]
+    return ""
+
+
+def read(pane, lines=30, ansi=False):
+    """The pane's visible screen, in place of `tmux capture-pane -p` (or `-e`,
+    with its colours, when `ansi`)."""
     if not ID_RE.match(pane or ""):
         return ""
     r = call("pane.read", {"pane_id": pane, "source": "visible", "lines": lines,
-                           "format": "text", "strip_ansi": True}) or {}
+                           "format": "ansi" if ansi else "text",
+                           "strip_ansi": not ansi}) or {}
     return (r.get("read") or {}).get("text", "")
 
 
@@ -180,8 +192,9 @@ def current():
 def send(pane, text="", keys=None):
     """Type into a pane. '' on success, else why not.
 
-    One `pane.send_input` carries the text and the keys together, so a message
-    and its Enter land in that order without a race.
+    One `pane.send_input` carries the text and the keys together - but as one
+    burst, which Claude Code takes for a paste, Enter and all. To submit a
+    message, send_pane in core sends the text and the Enter as two calls.
     """
     if not ID_RE.match(pane or ""):
         return "not a pane id"

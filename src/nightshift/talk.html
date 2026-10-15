@@ -4,18 +4,39 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>nightshift talk</title>
 <style>
+/* JetBrains Mono, served from the package (fonts/, OFL) so talk needs no network.
+   Split by script the way Google Fonts does - the browser only fetches the
+   subsets a page actually uses; Chinese falls through to PingFang. */
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:100 800;font-display:swap;
+  src:url(/fonts/jetbrains-mono-latin-wght-normal.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"JetBrains Mono";font-style:italic;font-weight:100 800;font-display:swap;
+  src:url(/fonts/jetbrains-mono-latin-wght-italic.woff2) format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:100 800;font-display:swap;
+  src:url(/fonts/jetbrains-mono-latin-ext-wght-normal.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"JetBrains Mono";font-style:italic;font-weight:100 800;font-display:swap;
+  src:url(/fonts/jetbrains-mono-latin-ext-wght-italic.woff2) format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:100 800;font-display:swap;
+  src:url(/fonts/jetbrains-mono-vietnamese-wght-normal.woff2) format("woff2");
+  unicode-range:U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB}
+@font-face{font-family:"JetBrains Mono";font-style:italic;font-weight:100 800;font-display:swap;
+  src:url(/fonts/jetbrains-mono-vietnamese-wght-italic.woff2) format("woff2");
+  unicode-range:U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB}
 :root{
   --bg:#0a0e14; --panel:#0e141c; --panel2:#121a24; --line:#1c2733;
   --tx:#d6dee9; --dim:#8b95a1; --dimmer:#5d6773;
   --busy:#ffb020; --idle:#3ddc97; --waiting:#ff4757; --draft:#c77dff;
   --unknown:#8b95a1; --ended:#4a5563; --you:#57b6ff; --unread:#5bc8ff;
-  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
-  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --mono:"JetBrains Mono","PingFang SC","Hiragino Sans GB",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:var(--mono);               /* the conversation reads like the terminal it came from */
 }
 *{box-sizing:border-box}
 html,body{height:100%}
-body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.6 var(--sans);
-  display:grid;grid-template-columns:216px 1fr;grid-template-rows:100%;
+body{margin:0;background:var(--bg);color:var(--tx);font:13.5px/1.7 var(--sans);
+  display:grid;grid-template-columns:256px 1fr;grid-template-rows:100%;
   height:100vh;overflow:hidden}
 ::-webkit-scrollbar{width:9px;height:9px}
 ::-webkit-scrollbar-thumb{background:#1f2a36;border-radius:9px}
@@ -54,12 +75,16 @@ aside{background:var(--panel);border-right:1px solid var(--line);
 .dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
 .s.busy{color:var(--busy)} .s.idle{color:var(--idle)} .s.waiting{color:var(--waiting)}
 .s.draft{color:var(--draft)} .s.unknown{color:var(--unknown)} .s.ended{color:var(--ended)}
-.s.unread{color:var(--unread)} .s.viewing{color:var(--tx)} .s .rs{color:inherit}
+.s.unread{color:var(--unread)} .s .rs{color:inherit}
 .s.ended{opacity:.72} .s.ended:hover,.s.ended.on{opacity:1}
-.s .nm{font:11px var(--mono);color:var(--tx);flex:1;min-width:0;overflow:hidden;
+.s .nm{font:500 11.5px var(--mono);color:var(--tx);flex:1;min-width:0;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
-.s .ti{font-size:9px;color:var(--dim);margin-top:1px;padding-left:13px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.s .ti{display:flex;gap:8px;font-size:9.5px;color:var(--dimmer);margin-top:1px;
+  padding-left:13px;white-space:nowrap}
+.s .ti .tw{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.s .ti .cx{flex:none} .s .ti .cx.mid{color:var(--busy)} .s .ti .cx.hi{color:var(--waiting)}
+.s .ti .up{flex:none;color:var(--idle)}
+.brand .up{color:var(--idle)}
 .s .q{font:9px var(--mono);color:var(--dimmer);flex:none}
 .s.busy .dot{animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
@@ -68,7 +93,8 @@ aside{background:var(--panel);border-right:1px solid var(--line);
 main{display:flex;flex-direction:column;min-width:0;min-height:0}
 header{display:flex;align-items:center;gap:12px;padding:.5rem .9rem;
   border-bottom:1px solid var(--line);background:var(--panel)}
-header .who{font:12px var(--mono);font-weight:700;color:var(--tx);flex:none}
+header .who{font:12px var(--mono);font-weight:700;color:var(--tx);flex:none;max-width:42%;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 header .meta{font-size:11px;color:var(--dimmer);white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis}
 header .sp{flex:1}
@@ -79,6 +105,10 @@ button{display:flex;align-items:center;height:24px;font:11px var(--mono);color:v
   cursor:pointer;flex:none}
 button:hover{color:var(--tx);border-color:#31404f}
 button.on{color:var(--tx);border-color:#3a4b5c;background:var(--panel2)}
+button.upd{color:var(--idle);border-color:rgba(61,220,151,.45)}
+button.upd:hover{color:var(--idle);border-color:var(--idle)}
+button.upd.arm{color:var(--bg);background:var(--idle);border-color:var(--idle)}
+button.upd:disabled{opacity:.7;cursor:wait}
 
 .feed{flex:1;overflow-y:auto;padding:22px 0 40px}
 .wrap{max-width:1040px;margin:0 auto;padding:0 26px}
@@ -90,6 +120,7 @@ button.on{color:var(--tx);border-color:#3a4b5c;background:var(--panel2)}
 .user{border-left:2px solid var(--you);padding:7px 12px 8px 13px;border-radius:0 8px 8px 0;
   background:rgba(87,182,255,.06)}
 .user .lbl{color:var(--you);opacity:.75}
+.user.queued{opacity:.55;border-left-style:dashed;background:transparent}
 .say{padding-left:16px}
 .cmd{font:12px var(--mono);color:var(--draft);padding-left:16px;opacity:.85}
 .note{font:11px var(--mono);color:var(--dimmer);padding-left:16px}
@@ -139,6 +170,12 @@ code{font:12.5px var(--mono);background:#141d27;border:1px solid var(--line);
 .say .h{display:block;font-weight:600;color:#fff;margin:.7em 0 .1em}
 .say hr{border:0;border-top:1px solid var(--line);margin:1em 0}
 .say a{color:var(--you)}
+.body table{border-collapse:collapse;margin:.4em 0 .6em;white-space:normal;
+  display:block;max-width:100%;overflow-x:auto;font-size:12.5px;line-height:1.55}
+.body th,.body td{border:1px solid var(--line);padding:4px 11px;text-align:left;
+  vertical-align:top}
+.body th{background:var(--panel2);color:#fff;font-weight:600}
+.body tr:nth-child(even) td{background:rgba(255,255,255,.018)}
 
 .side{opacity:.82;border-left:2px solid #2a3646;margin-left:6px;padding-left:10px}
 .tsep{display:flex;align-items:center;gap:11px;margin:26px 0 16px;
@@ -147,6 +184,30 @@ code{font:12.5px var(--mono);background:#141d27;border:1px solid var(--line);
 .tsep::before,.tsep::after{content:"";height:1px;background:var(--line);flex:1}
 .more{display:block;margin:0 auto 22px}
 .empty{color:var(--dimmer);text-align:center;padding:70px 20px;font:12px var(--mono)}
+
+/* the session is working: a line under the newest message saying on what */
+.typing{display:none;align-items:center;gap:10px;padding-left:16px;margin-top:4px;
+  font:11px var(--mono);color:var(--dim)}
+.typing.on{display:flex}
+.typing .by{font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--busy);flex:none}
+.typing .dots{display:inline-flex;gap:4px;flex:none}
+.typing .dots i{width:6px;height:6px;border-radius:50%;background:var(--busy);
+  animation:hop 1.2s ease-in-out infinite}
+.typing .dots i:nth-child(2){animation-delay:.15s}
+.typing .dots i:nth-child(3){animation-delay:.3s}
+@keyframes hop{0%,60%,100%{transform:translateY(0);opacity:.35}
+  30%{transform:translateY(-4px);opacity:1}}
+.typing .what{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  background:linear-gradient(90deg,var(--dim) 30%,var(--tx) 50%,var(--dim) 70%);
+  background-size:300% 100%;-webkit-background-clip:text;background-clip:text;
+  color:transparent;animation:shine 2.4s linear infinite}
+@keyframes shine{from{background-position:100% 0}to{background-position:0 0}}
+.typing .t{color:var(--dimmer);flex:none}
+@media (prefers-reduced-motion:reduce){
+  .typing .dots i{animation:pulse 1.6s ease-in-out infinite}
+  .typing .what{animation:none;color:var(--dim);background:none}
+}
 /* ---------- the pane's live screen, and the box you type into ---------- */
 .dock{border-top:1px solid var(--line);background:var(--panel);flex:none}
 .scr{border-bottom:1px solid var(--line);background:#080c11}
@@ -157,7 +218,7 @@ code{font:12.5px var(--mono);background:#141d27;border:1px solid var(--line);
 .scr.open .cap .caret{transform:rotate(90deg)}
 .scr pre{display:none;padding:0 14px 9px;max-height:190px;color:#9fb0c2;font-size:11.5px}
 .scr.open pre{display:block}
-.compose{padding:9px 14px 10px;display:flex;flex-direction:column;gap:7px}
+.compose{padding:9px 14px 10px;display:flex;flex-direction:column;gap:7px;position:relative}
 .compose.off{opacity:.5;pointer-events:none}
 .crow{display:flex;gap:8px;align-items:flex-end}
 .compose textarea{flex:1;resize:none;min-height:36px;max-height:190px;padding:8px 10px;
@@ -175,12 +236,83 @@ code{font:12.5px var(--mono);background:#141d27;border:1px solid var(--line);
 .shot{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px;
   border:1px solid var(--line);background:var(--panel2);font:10px var(--mono);color:var(--dim)}
 .shot img{width:26px;height:26px;object-fit:cover;border-radius:3px}
+.shot .fi{width:26px;height:26px;border-radius:3px;border:1px solid var(--line);
+  background:var(--panel);display:grid;place-items:center;font:8px var(--mono);
+  font-style:normal;text-transform:uppercase;color:var(--dim)}
 .shot b{cursor:pointer;color:var(--dimmer)}
 .shot b:hover{color:var(--waiting)}
+
+/* a question Claude asked (AskUserQuestion), answered here instead of the terminal */
+.ask{border-bottom:1px solid var(--line);background:#0b1118;padding:10px 14px 9px;
+  max-height:48vh;overflow-y:auto}
+.atabs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:9px}
+.at{font:11px var(--mono);padding:3px 9px;border-radius:5px;border:1px solid var(--line);
+  color:var(--dim);cursor:pointer;user-select:none}
+.at:hover{color:var(--tx);border-color:#31404f}
+.at.on{background:var(--you);border-color:var(--you);color:var(--bg)}
+.at.ok:not(.on){color:var(--tx)}
+.aq{font-weight:600;color:#fff;margin:0 0 7px;display:flex;gap:10px;align-items:baseline;
+  flex-wrap:wrap}
+.aq .ak{font:10px var(--mono);font-weight:400;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--dimmer)}
+.ao{display:flex;gap:9px;align-items:flex-start;padding:5px 8px;border-radius:6px;
+  cursor:pointer;border:1px solid transparent}
+.ao:hover{background:var(--panel2)}
+.ao.on{border-color:#2b4a63;background:rgba(87,182,255,.07)}
+.ao input[type=checkbox],.ao input[type=radio]{margin:4px 0 0;accent-color:var(--you);flex:none}
+.ao .an{font:12px var(--mono);color:var(--dimmer);flex:none;min-width:16px}
+.ao b{color:var(--tx);font-weight:600}
+.ao .ad{display:block;font-size:12px;color:var(--dim);margin-top:1px}
+.ao .ot{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:6px;
+  color:var(--tx);font:12.5px var(--mono);padding:4px 8px;outline:none}
+.ao .ot:focus{border-color:#2e3d4d}
+.apv{margin:6px 0 2px 34px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;
+  background:var(--panel);max-height:220px}
+.ar{display:flex;flex-direction:column;padding:4px 0}
+.ar .rq{color:var(--dim);font-size:12.5px} .ar .ra{color:var(--tx);padding-left:14px}
+.ar .ra.none{color:var(--waiting)}
+.afoot{display:flex;gap:8px;align-items:center;margin-top:9px}
+.afoot .pri{color:var(--tx);border-color:var(--you)}
+.afoot .anote{font:10.5px var(--mono);color:var(--dimmer)}
+.afoot .anote.warn{color:var(--waiting)}
+
+/* `/` in the compose box: Claude Code's commands, then this session's skills */
+.cmds{display:none;position:absolute;left:14px;right:14px;bottom:calc(100% - 4px);z-index:5;
+  max-width:760px;background:var(--panel);border:1px solid #2b3a49;border-radius:8px;
+  box-shadow:0 -10px 30px rgba(0,0,0,.5);overflow:hidden}
+.cmds.on{display:block}
+.cmds .ls{max-height:296px;overflow-y:auto;padding:4px 0}
+.ci{display:flex;gap:12px;align-items:baseline;padding:4px 12px;cursor:pointer}
+.ci:hover{background:var(--panel2)}
+.ci.sel{background:#16202c;box-shadow:inset 2px 0 0 var(--you)}
+.ci .cn{font:12px var(--mono);color:var(--tx);flex:none;max-width:48%;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ci .cn b{color:var(--you);font-weight:600}
+.ci .cd{font-size:11.5px;color:var(--dim);flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ci .ck{font:9px var(--mono);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--dimmer);flex:none}
+.cmds .ft{border-top:1px solid var(--line);padding:4px 12px;
+  font:10px var(--mono);color:var(--dimmer)}
 
 footer{border-top:1px solid var(--line);background:var(--panel);padding:6px 18px;
   font:10.5px var(--mono);color:var(--dimmer);display:flex;gap:16px}
 .live{color:var(--idle)}
+
+/* the session's status line, where Claude Code draws it: under the prompt */
+footer{overflow:hidden}
+#fPath{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+footer .sl{margin-left:auto;display:flex;gap:14px;align-items:center;white-space:nowrap}
+.sl .m{color:var(--draft)}
+.sl .g{display:inline-flex;align-items:center;gap:5px;cursor:default}
+.sl .k{color:var(--dimmer)}
+.sl .bar{display:inline-flex;gap:2px}
+.sl .bar i{width:6px;height:9px;border-radius:1.5px;background:#1f2a36}
+.sl .bar i.f{background:currentColor}
+.sl .v{font-weight:700}
+.sl .lo{color:var(--idle)} .sl .mid{color:var(--busy)} .sl .hi{color:var(--waiting)}
+.sl .rs{color:var(--dimmer);font-weight:400}
+.sl .upd{color:var(--idle);cursor:default}
 </style>
 
 <aside>
@@ -199,6 +331,7 @@ footer{border-top:1px solid var(--line);background:var(--panel);padding:6px 18px
     <span class="who" id="who">&mdash;</span>
     <span class="meta" id="meta"></span>
     <span class="sp"></span>
+    <button id="bUpd" class="upd" style="display:none">&#8635; update</button>
     <button id="bThink" class="on" title="thinking blocks (h)">thinking</button>
     <button id="bTools" class="on" title="tool calls (t)">tools</button>
     <button id="bOpen" title="expand every thinking / tool block (e)">expand</button>
@@ -212,10 +345,13 @@ footer{border-top:1px solid var(--line);background:var(--panel);padding:6px 18px
         <span>terminal</span><span id="scrHint"></span></div>
       <pre id="scrBody"></pre>
     </div>
+    <div class="ask" id="ask" style="display:none"></div>
     <div class="compose" id="compose">
+      <div class="cmds" id="cmds"><div class="ls"></div>
+        <div class="ft">&uarr;&darr; choose &middot; tab fill in &middot; enter run &middot; esc close</div></div>
       <div class="shots" id="shots"></div>
       <div class="crow">
-        <textarea id="msg" rows="1" placeholder="message this session &mdash; enter sends, shift+enter newlines, paste an image"></textarea>
+        <textarea id="msg" rows="1" placeholder="message this session &mdash; / for commands, enter sends, shift+enter newlines, paste or drop files"></textarea>
         <div class="keys">
           <button id="kEsc" title="escape - interrupt what it is doing">esc</button>
           <button id="kInt" title="ctrl-c">&#94;C</button>
@@ -231,41 +367,95 @@ footer{border-top:1px solid var(--line);background:var(--panel);padding:6px 18px
     <span id="fState">idle</span>
     <span id="fCount"></span>
     <span id="fPath"></span>
+    <span class="sl" id="sl"></span>
   </footer>
 </main>
 
 <script>
 const $ = s => document.querySelector(s);
 const S = {sid:null, next:null, sessions:[], row:null, tools:{}, n:0, lastDay:"",
-           follow:true, filter:"", busy:false, run:null, watch:null};
+           follow:true, filter:"", busy:false, run:null, watch:null,
+           open:new Map(), turn:0, sent:0, queue:[], taken:new Set(), ask:null};
+const U = {arm: 0, busy: false, hold: 0};        /* the restart-to-update button */
 
 /* ---------- helpers ---------- */
 /* the registry says `busy`; a person says "working". And an idle session with
-   output you have not opened yet is "unread". */
-const stateLabel = r => r.watching ? "viewing"
-  : (r.unread && (r.state === "idle" || r.state === "unknown"))
+   output you have not opened yet is "unread". (No "viewing": herdr keeps a pane
+   focused with no terminal attached, so that says nothing about you.) */
+const stateLabel = r => (r.unread && (r.state === "idle" || r.state === "unknown"))
   ? "unread" : (r.state === "busy" ? "working" : r.state);
 
 const esc = s => (s||"").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+/* Claude Code names a session after its folder plus two hex digits, so under a
+   folder heading every name reads the same - `khawliang-39`, `khawliang-01`. The
+   title is what tells them apart; the name shrinks to its digits. A name you
+   gave it yourself (/rename) is kept whole. */
+function tagOf(s){
+  const m = /^(.+)-([0-9a-f]{2})$/.exec(s.name || "");
+  const leaf = (s.cwd || "").split("/").pop();
+  return m && (s.cwd === "~" || m[1] === leaf) ? m[2] : (s.name || "");
+}
+/* where it sits: the herdr tab (or tmux window) name, which you chose */
+function tabOf(s){
+  const w = s.where && s.where !== "-" ? s.where.split(":").slice(1).join(":") : "";
+  return /^\d+(\.\d+)?$/.test(w) ? "tab " + w : w;
+}
 const hhmm = ts => { const d = new Date(ts||0);
   return (!ts || isNaN(d)) ? "" : d.toTimeString().slice(0,5); };
 const day = ts => { const d = new Date(ts||0);
   return (!ts || isNaN(d)) ? "" : d.toDateString(); };
 
 /* just enough markdown that a reply reads the way it did in the terminal */
+const inline = t => esc(t)
+    .replace(/`([^`\n]+)`/g, (m,c) => "<code>" + c + "</code>")
+    .replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")
+    .replace(/(^|\s)(https?:\/\/[^\s<)]+)/g,
+             '$1<a href="$2" target="_blank" rel="noreferrer">$2</a>');
+
 function md(t){
-  const fences = [], MARK = "\u0000";   /* survives esc(), absent from prose */
+  const fences = [], tables = [], MARK = "\u0000", TBL = "\u0001";  /* survive esc() */
   t = (t||"").replace(/```(\w*)\n?([\s\S]*?)```/g, (m,l,c) =>
       MARK + (fences.push(c.replace(/\n$/,"")) - 1) + MARK);
-  t = esc(t)
-      .replace(/`([^`\n]+)`/g, (m,c) => "<code>" + c + "</code>")
-      .replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")
-      .replace(/(^|\s)(https?:\/\/[^\s<)]+)/g,
-               '$1<a href="$2" target="_blank" rel="noreferrer">$2</a>')
+  t = t.replace(TABLE_RE, m => TBL + (tables.push(table(m)) - 1) + TBL);
+  t = inline(t)
       .replace(/^#{1,6}[ \t]+(.+)$/gm, '<span class="h">$1</span>')
       .replace(/^ {0,3}(?:-{3,}|\*{3,})[ \t]*$/gm, "<hr>");
-  return t.replace(/\u0000(\d+)\u0000/g,
+  return t.replace(/\u0001(\d+)\u0001/g, (m,i) => tables[+i])
+          .replace(/\u0000(\d+)\u0000/g,
                    (m,i) => '<pre class="code">' + esc(fences[+i]) + "</pre>");
+}
+
+/* a GitHub table: a header row, a |---|:---:| rule, then rows - the newline
+   after it goes too, since the table is a block of its own */
+const TABLE_RE = /^[ \t]*\|?[^\n]*\|[^\n]*\n(?=[^\n]*\|)[ \t]*\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*(?:\n[ \t]*\|?[^\n]*\|[^\n]*)*\n?/gm;
+
+/* split one row on its pipes - not a pipe escaped as \|, nor one inside `code` */
+function cells(row){
+  const out = []; let cur = "", code = false;
+  row = row.trim().replace(/^\|/, "").replace(/\|$/, "");
+  for(let i = 0; i < row.length; i++){
+    const c = row[i];
+    if(c === "\\" && row[i + 1] === "|"){ cur += "|"; i++; continue; }
+    if(c === "`") code = !code;
+    if(c === "|" && !code){ out.push(cur.trim()); cur = ""; continue; }
+    cur += c;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+function table(src){
+  const rows = src.replace(/\n$/, "").split("\n");
+  const head = cells(rows[0]);
+  const align = cells(rows[1]).map(r => /^:-+:$/.test(r) ? "center"
+                                        : /^-+:$/.test(r) ? "right" : "");
+  const td = (tag, c, i) => "<" + tag + (align[i] ? ' style="text-align:' + align[i] + '"' : "") +
+                            ">" + inline(c) + "</" + tag + ">";
+  return "<table><thead><tr>" + head.map((c, i) => td("th", c, i)).join("") +
+    "</tr></thead><tbody>" + rows.slice(2).map(r =>
+      "<tr>" + head.map((_, i) => td("td", cells(r)[i] || "", i)).join("") + "</tr>").join("") +
+    "</tbody></table>";
 }
 
 /* one line that says what a tool call is actually doing */
@@ -283,6 +473,7 @@ async function loadSessions(){
   let d;
   try { d = await (await fetch("/api/talk/sessions")).json(); } catch(e){ return; }
   S.sessions = d.sessions;
+  S.limits = d.limits || null;
   const heir = successor();               /* /clear starts a new conversation */
   if(heir){
     openSession(heir.sid);
@@ -295,13 +486,11 @@ async function loadSessions(){
   if(r){ S.row = r; head(); }
 }
 
-const URG = {waiting:0, draft:1, idle:2, busy:3, unknown:4};
-const urg = s => URG[s.state] === undefined ? 4 : URG[s.state];
 
 /* only what is still running, split by the directory it runs in */
 function renderList(){
   const f = S.filter.toLowerCase();
-  const keep = s => !f || (s.name + " " + (s.title||"") + " " + s.cwd).toLowerCase().includes(f);
+  const keep = s => !f || [s.name, s.title, s.cwd, s.where].join(" ").toLowerCase().includes(f);
   const live = S.sessions.filter(s => s.live && keep(s));
   const by = new Map();
   for(const s of live){
@@ -309,13 +498,15 @@ function renderList(){
     if(!by.has(k)) by.set(k, []);
     by.get(k).push(s);
   }
+  /* a fixed order - by path, then name. Sorting by state had rows and whole
+     workspaces swap places every poll as sessions went busy and idle; the
+     colour already says which one wants you. */
   const groups = [...by.entries()].map(([path, rows]) => {
-    rows.sort((a,b) => urg(a) - urg(b) || (a.name < b.name ? -1 : 1));
-    return {path, rows, worst: Math.min(...rows.map(urg))};
-  }).sort((a,b) => a.worst - b.worst || (a.path < b.path ? -1 : 1));
+    rows.sort((a,b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    return {path, rows};
+  }).sort((a,b) => (a.path < b.path ? -1 : 1));
 
-  const box = $("#list");
-  box.innerHTML = "";
+  const list = $("#list"), box = document.createElement("div");
   for(const g of groups){
     const parts = g.path.split("/").filter(Boolean);
     const home = g.path === "~";                    /* a bare ~ reads as nothing */
@@ -331,15 +522,23 @@ function renderList(){
     for(const s of g.rows){
       const el = document.createElement("div");
       const lbl = stateLabel(s);
-      el.className = "s " + (lbl === "unread" || lbl === "viewing" ? lbl : s.state) +
+      el.className = "s " + (lbl === "unread" ? lbl : s.state) +
                      (s.sid === S.sid ? " on" : "");
-      el.title = [s.name, s.title, s.cwd].filter(Boolean).join("\n");
-      const sub = s.title && s.title !== s.name ? s.title : "";
+      const u = s.usage;
+      el.title = [s.title, s.name, s.where !== "-" ? s.where : "", s.cwd,
+                  u ? "context " + u.pct + "%" + (u.src !== "statusline" ? " (estimated)" : "") : "",
+                  s.update ? "running " + s.version + " - " + s.update + " is installed, restart to update" : ""]
+                 .filter(Boolean).join("\n");
+      const title = s.title && s.title !== s.name ? s.title : "";
+      const sub = [tabOf(s), title ? tagOf(s) : ""].filter(Boolean).join(" \u00b7 ");
+      const cx = u ? '<span class="cx ' + (u.pct > 80 ? "hi" : u.pct >= 50 ? "mid" : "") + '">' +
+                     (u.src !== "statusline" ? "~" : "") + u.pct + '%</span>' : "";
       el.innerHTML =
         '<div class="top"><span class="dot"></span>' +
-        '<span class="nm">' + esc(s.name) + '</span>' +
-        '<span class="q">' + esc(lbl === "unread" || lbl === "viewing" ? lbl : s.quiet_str) + '</span></div>' +
-        (sub ? '<div class="ti">' + esc(sub) + '</div>' : '');
+        '<span class="nm">' + esc(title || s.name) + '</span>' +
+        '<span class="q">' + esc(lbl === "unread" ? lbl : s.quiet_str) + '</span></div>' +
+        (sub || cx || s.update ? '<div class="ti"><span class="tw">' + esc(sub) + '</span>' +
+          (s.update ? '<span class="up">update</span>' : '') + cx + '</div>' : '');
       el.onclick = () => openSession(s.sid);
       box.appendChild(el);
     }
@@ -350,8 +549,17 @@ function renderList(){
     n.innerHTML = '<div class="wp">' + (f ? "nothing matches" : "no live sessions") + '</div>';
     box.appendChild(n);
   }
-  $("#count").textContent = live.length + " live · " +
-    groups.length + (groups.length === 1 ? " workspace" : " workspaces");
+  /* swap in only what changed, keeping where you had scrolled to */
+  if(list.innerHTML !== box.innerHTML){
+    const y = list.scrollTop;
+    list.replaceChildren(...box.childNodes);
+    list.scrollTop = y;
+  }
+  const behind = live.filter(s => s.update).length;
+  $("#count").innerHTML = live.length + " live · " +
+    groups.length + (groups.length === 1 ? " workspace" : " workspaces") +
+    (behind ? ' · <span class="up" title="running an older Claude Code than the one installed">' +
+              behind + " to restart</span>" : "");
 }
 
 /* `/clear` (and starting a fresh conversation any other way) keeps the session
@@ -370,20 +578,73 @@ function successor(){
 function head(){
   const r = S.row;
   if(!r){ $("#who").textContent = "—"; $("#meta").textContent = ""; dockState(); return; }
-  $("#who").textContent = r.name;
-  $("#meta").textContent = [r.title, r.cwd, r.where !== "-" ? r.where : "", r.model]
+  const title = r.title && r.title !== r.name ? r.title : "";
+  $("#who").textContent = title || r.name;
+  $("#who").title = title || r.name;
+  $("#meta").textContent = [title ? r.name : "", r.cwd, r.where !== "-" ? r.where : "", r.model]
                              .filter(Boolean).join("   ·   ");
   const b = $("#state");
   b.style.display = "";
   const lbl = stateLabel(r);
   b.textContent = lbl;
   b.style.color = getComputedStyle(document.documentElement)
-                    .getPropertyValue("--" + (lbl === "unread" ? "unread"
-                                              : lbl === "viewing" ? "tx" : r.state))
+                    .getPropertyValue("--" + (lbl === "unread" ? "unread" : r.state))
                   || "#8b95a1";
   $("#bJump").style.display = r.pane ? "" : "none";
-  dockState();
+  dockState(); typing(); statusLine(); updButton(); askDraw();
   $("#fPath").textContent = r.sid ? "~/.claude/projects/.../" + r.sid.slice(0,8) + ".jsonl" : "";
+}
+
+/* ---------- status line ---------- */
+/* What Claude Code shows under its prompt, for the session you are reading - the
+   same 5-cell gauges and <50 / 50-80 / >80 colours as statusline-command.sh,
+   from the copy that script keeps of what Claude Code handed it. A session whose
+   status line has not run since then is estimated from its transcript: "~ctx". */
+const band = p => p < 50 ? "lo" : p <= 80 ? "mid" : "hi";
+const num = n => (n || 0).toLocaleString("en-US");
+
+function gauge(label, pct, tip, after){
+  const p = Math.round(pct), f = Math.max(0, Math.min(5, Math.floor((p + 10) / 20)));
+  return '<span class="g ' + band(p) + '" title="' + esc(tip).replace(/"/g, "&quot;") + '">' +
+    '<span class="k">' + label + '</span><span class="bar">' +
+    [0,1,2,3,4].map(i => i < f ? '<i class="f"></i>' : '<i></i>').join("") +
+    '</span><span class="v">' + p + '%</span>' + (after || "") + '</span>';
+}
+
+/* until a limit window rolls over: "<1m", "47m", "4h10m", "3d4h" */
+function until(at){
+  const t = typeof at === "number" ? at * 1000 : Date.parse(at);
+  const s = Math.round((t - Date.now()) / 1000);
+  if(!t || isNaN(s) || s <= 0) return "";
+  const d = s / 86400 | 0, h = (s % 86400) / 3600 | 0, m = (s % 3600) / 60 | 0;
+  return s < 60 ? "<1m" : d ? d + "d" + h + "h" : h ? h + "h" + m + "m" : m + "m";
+}
+
+function statusLine(){
+  const el = $("#sl"), u = S.row && S.row.usage, L = S.limits;
+  let h = "";
+  if(S.row && S.row.update)                   /* word for word what Claude Code says */
+    h += '<span class="upd" title="this session runs ' + esc(S.row.version) + ', ' +
+         esc(S.row.update) + ' is installed - models and fixes that came with it need ' +
+         'a restart (/exit, then claude --resume)">\u2714 Update installed \u00b7 Restart to update</span>';
+  if(u){
+    const est = u.src !== "statusline";
+    if(u.model) h += '<span class="m">' + esc(u.model) + '</span>';
+    h += gauge(est ? "~ctx" : "ctx", u.pct,
+      (est ? "estimated from the transcript - this session's status line has not run " +
+             "since nightshift started keeping a copy\n" : "") +
+      num(u.used) + " of " + num(u.size) + " tokens in context" +
+      (u.cost != null ? "\n$" + u.cost.toFixed(2) + " this session" : "") +
+      (u.effort ? "\neffort " + u.effort : "") + (u.at ? "\nas of " + hhmm(u.at) : ""));
+  }
+  for(const [k, lbl, long] of [["five", "5h", "5-hour"], ["week", "7d", "7-day"]]){
+    const x = L && L[k];
+    if(!x || x.pct == null) continue;
+    const r = until(x.resets);
+    h += gauge(lbl, x.pct, "the account's " + long + " limit" + (r ? ", resets in " + r : ""),
+               r ? ' <span class="rs">\u21bb' + r + '</span>' : "");
+  }
+  if(el._h !== h){ el.innerHTML = h; el._h = h; }  /* a rewrite would drop a hover tooltip */
 }
 
 /* ---------- transcript ---------- */
@@ -394,9 +655,13 @@ function openSession(sid, from){
   S.watch = S.row && S.row.live ? {pane: S.row.pane, name: S.row.name, cwd: S.row.cwd}
                                 : null;             /* what to re-find after a /clear */
   S.tools = {}; S.n = 0; S.lastDay = ""; S.run = null;
+  S.open = new Map(); S.turn = 0; S.sent = 0; S.queue = []; S.taken = new Set(); S.ask = null;
   S.follow = true; $("#bFollow").classList.add("on");
-  $("#feed").innerHTML = '<div class="wrap" id="wrap"></div>';
-  renderList(); head(); seen(); poll(true);
+  $("#feed").innerHTML = '<div class="wrap" id="wrap"></div>' +
+    '<div class="wrap"><div class="typing" id="typing"><span class="by">claude</span>' +
+    '<span class="dots"><i></i><i></i><i></i></span>' +
+    '<span class="what"></span><span class="t"></span></div></div>';
+  renderList(); head(); seen(); poll(true); loadCommands();
 }
 
 /* opening a session, and every batch you watch arrive while following, is what
@@ -407,20 +672,32 @@ function seen(){
                            body: JSON.stringify({sid: S.sid})}).catch(() => {});
 }
 
+/* One request at a time, tied to the session and offset it asked from. A reply
+   for a session you have since left (or from before a reload of this one) is
+   dropped - applied, it would hand this feed another file's offset. And a request
+   that hangs (the laptop slept, the server restarted) is given up on, not waited
+   on forever with every later poll locked out. */
 async function poll(first){
-  if(!S.sid || S.busy) return;
-  S.busy = true;
+  if(!S.sid) return;
+  const key = S.sid + "@" + S.next;
+  if(S.busy === key) return;
+  S.busy = key;
+  const ac = new AbortController(), tm = setTimeout(() => ac.abort(), 10000);
   try{
     const u = "/api/talk/transcript?sid=" + S.sid + (S.next === null ? "" : "&from=" + S.next);
-    const d = await (await fetch(u)).json();
-    if(d.error){ S.busy = false; return; }
-    if(d.reset){ S.busy = false; return openSession(S.sid, 0); }
+    const d = await (await fetch(u, {signal: ac.signal})).json();
+    if(S.busy !== key) return;                        /* the feed moved on */
+    if(d.error) return;
+    if(d.reset){ S.busy = null; return openSession(S.sid, 0); }
     S.next = d.next;
     if(first && d.trimmed) headBanner();
     if(d.events.length){ append(d.events); if(S.follow) seen(); }
     $("#fCount").textContent = S.n + " events · " + (d.size/1024|0) + " KB on disk";
   }catch(e){}
-  S.busy = false;
+  finally{
+    clearTimeout(tm);
+    if(S.busy === key) S.busy = null;
+  }
 }
 
 function headBanner(){
@@ -490,7 +767,25 @@ function append(evs){
   const feed = $("#feed");
   const stuck = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 150;
   for(const e of evs){
-    if(e.k === "result"){ attach(e); continue; }
+    if(e.k === "result"){
+      attach(e); S.open.delete(e.id);
+      if(S.ask && S.ask.id === e.id){ S.ask = null; askDraw(); }   /* answered */
+      continue;
+    }
+    if(e.k === "tool" && e.name === "AskUserQuestion" && e.input && Array.isArray(e.input.questions)){
+      const qs = e.input.questions;
+      S.ask = {id: e.id, qs: qs, i: 0, err: "", busy: false, sent: false,
+               picks: qs.map(() => ({opts: new Set(), other: ""}))};
+    }
+    if(e.k === "queue"){ queueOp(e); continue; }
+    if(e.k === "user" && e.mid && S.taken.delete(e.text)) continue;  /* shown when typed */
+    if(e.k === "tool"){                  /* a Bash call's description beats its command */
+      const inp = e.input || {}, what = (typeof inp.description === "string" &&
+                                         inp.description) || summarize(inp);
+      S.open.set(e.id, e.name + (what ? " \u00b7 " + what : ""));
+    }
+    else if((e.k === "user" && !e.mid) || e.k === "cmd"){ S.open.clear(); S.turn = Date.parse(e.ts) || 0; }
+    else if(e.k === "say") S.open.clear();
     const d = day(e.ts);
     if(d && d !== S.lastDay){
       S.lastDay = d;
@@ -511,13 +806,68 @@ function append(evs){
     S.n++;
   }
   if(S.follow && stuck) feed.scrollTop = feed.scrollHeight;
+  typing(); askDraw();
+}
+
+/* Claude Code writes a reply to disk only once it is whole, so there is nothing
+   to stream - but the registry says when a session is working, and the newest
+   events say on what: a tool call still waiting on its result, else thinking */
+function typing(){
+  const el = $("#typing");
+  if(!el) return;
+  const r = S.row;
+  const on = !!(r && r.live && r.state !== "waiting" &&
+                (r.state === "busy" || Date.now() - S.sent < 6000));
+  const feed = $("#feed");
+  const stuck = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 150;
+  el.classList.toggle("on", on);
+  if(!on) return;
+  const tool = [...S.open.values()].pop();
+  el.querySelector(".what").textContent = tool ? "running " + tool : "thinking";
+  const s = S.turn ? Math.round((Date.now() - S.turn) / 1000) : -1;
+  el.querySelector(".t").textContent = s < 0 || s > 6 * 3600 ? ""
+    : s < 60 ? s + "s" : (s / 60 | 0) + "m " + String(s % 60).padStart(2, "0") + "s";
+  if(S.follow && stuck) feed.scrollTop = feed.scrollHeight;
+}
+
+/* A message sent while a session works waits in Claude Code's queue - under its
+   prompt in the terminal, and nowhere in the conversation until it is picked up.
+   The transcript records every queue operation, so talk keeps its own copy: the
+   message shows, faded, the moment it is queued, and settles once Claude takes it
+   in mid-turn - or disappears to come back as the next turn when it is dequeued. */
+function queueOp(e){
+  const Q = S.queue, wrap = $("#wrap");
+  if(e.op === "enqueue"){
+    let el = null;
+    if(e.human && wrap){
+      el = node({k:"user", ts:e.ts, text:e.text});
+      el.classList.add("queued");
+      el.querySelector(".lbl").textContent = "you \u00b7 " + hhmm(e.ts) + " \u00b7 queued";
+      endRun(); wrap.appendChild(el); S.n++;
+    }
+    Q.push({text:e.text, el:el, ts:e.ts});
+  } else if(e.op === "dequeue"){
+    const it = Q.shift();                    /* it comes back as the next turn */
+    if(it && it.el) it.el.remove();
+  } else if(e.op === "remove"){
+    const i = Q.findIndex(q => q.text === e.text);
+    if(i < 0) return;
+    const it = Q.splice(i, 1)[0];
+    if(!it.el) return;
+    if(e.taken){                             /* taken in mid-turn: stays where typed */
+      it.el.classList.remove("queued");
+      it.el.querySelector(".lbl").textContent =
+        "you \u00b7 " + hhmm(it.ts) + " \u00b7 while it worked";
+      S.taken.add(e.text);
+    } else it.el.remove();                   /* pulled back out to edit */
+  }
 }
 
 function node(e){
   const el = document.createElement("div");
   el.className = "ev " + e.k;
   if(e.k === "user"){
-    el.innerHTML = '<div class="lbl">you · ' + hhmm(e.ts) + '</div>' +
+    el.innerHTML = '<div class="lbl">you · ' + hhmm(e.ts) + (e.mid ? ' · while it worked' : '') + '</div>' +
                    '<div class="body">' + md(e.text) + '</div>';
   } else if(e.k === "say"){
     el.innerHTML = '<div class="lbl">claude · ' + hhmm(e.ts) + '</div>' +
@@ -600,6 +950,7 @@ function dockState(){
   const waiting = r.state === "waiting";
   $("#bSend").textContent = waiting ? "type" : "send";
   $("#bSend").classList.toggle("warn", waiting);
+  if(Date.now() < U.hold) return;        /* a restart is under way: keep its note */
   $("#note2").className = "note2" + (waiting ? " warn" : "");
   $("#note2").textContent =
       off ? (!r.live ? "this session has ended"
@@ -612,11 +963,10 @@ function dockState(){
 
 async function say(extra){
   if(!canTalk()) return;
-  const text = msg.value;
-  const waiting = S.row.state === "waiting";
-  const body = Object.assign({sid: S.sid, text: text,
-                              submit: !waiting}, extra || {});
-  if(!body.text && !body.key && body.submit === false) return;
+  const text = unfold(msg.value);
+  /* always ask to submit: the server knows if it is waiting on you right now,
+     and then types without pressing enter (this page's state can be 4s old) */
+  const body = Object.assign({sid: S.sid, text: text, submit: true}, extra || {});
   let d = {};
   try{
     const r = await fetch("/api/talk/send", {method:"POST",
@@ -635,8 +985,15 @@ async function say(extra){
     return;
   }
   if(!body.key){
-    msg.value = ""; msg.style.height = "auto"; shots = []; drawShots();
-    if(body.submit) S.follow = true, $("#bFollow").classList.add("on");
+    const m = /^\/(\S+)/.exec(text), c = m && C.list.find(x => x.name === m[1]);
+    if(c && c.ui) $("#scr").classList.add("open");    /* it opens a panel: show it */
+    msg.value = ""; msg.style.height = "auto"; shots = []; drawShots(); cmdHide();
+    if(d.submitted === false){
+      $("#note2").className = "note2 warn";
+      $("#note2").textContent = "it is waiting on you - typed, not sent; hit ↵ to send";
+    }
+    if(d.submitted) S.follow = true, $("#bFollow").classList.add("on");
+    if(d.submitted && body.text) S.sent = Date.now(), typing();   /* before the registry catches up */
   }
   screen(true);
 }
@@ -646,32 +1003,141 @@ function drawShots(){
   shots.forEach((sh, i) => {
     const el = document.createElement("span");
     el.className = "shot";
-    el.innerHTML = '<img src="' + sh.url + '"><span>' + esc(sh.short) + '</span><b>&times;</b>';
+    el.innerHTML = (sh.url ? '<img src="' + sh.url + '">' : '<i class="fi">' + esc(sh.ext) + '</i>') +
+                   '<span>' + esc(sh.short) + '</span><b>&times;</b>';
     el.querySelector("b").onclick = () => {
-      msg.value = msg.value.replace(sh.path, "").replace(/\s+$/,"");
+      msg.value = msg.value.replace(sh.tag, "").replace(/ {2,}/g, " ").replace(/\s+$/,"");
       shots.splice(i,1); drawShots();
     };
     $("#shots").appendChild(el);
   });
 }
 
-/* a terminal cannot carry image bytes - park the paste on disk and hand the
-   session its path, which Claude Code will read */
+/* A pasted image reads as [20260928-095630.png] in the box, the way Claude Code
+   shows [Image #1], and a file as [report.pdf] - the full path under
+   ~/.claude/nightshift-paste/ is noise while you write. It is swapped back in
+   when the message is sent. */
+function unfold(text){
+  for(const sh of shots) text = text.split(sh.tag).join(sh.path);
+  return text;
+}
+
+/* A terminal cannot carry bytes, and a browser never tells a page where a file
+   lives - so a pasted or dropped file is copied to disk and the session gets the
+   copy's path, which Claude Code will read. Any kind of file, up to 50 MB. */
 async function stash(file){
-  if(!canTalk() || !file || !/^image\//.test(file.type)) return;
+  if(!canTalk() || !file) return;
   try{
     const r = await fetch("/api/talk/upload", {method:"POST",
-      headers:{"Content-Type": file.type}, body: file});
+      headers:{"Content-Type": file.type || "application/octet-stream",
+               "X-Filename": encodeURIComponent(file.name || "")}, body: file});
     const d = await r.json();
-    if(!r.ok){ $("#note2").textContent = d.error || "upload failed"; return; }
-    shots.push({path: d.path, short: d.short.split("/").pop(),
-                url: URL.createObjectURL(file)});
-    msg.value = (msg.value ? msg.value.replace(/\s*$/, " ") : "") + d.path + " ";
+    if(!r.ok){ $("#note2").textContent = "could not attach " + (file.name || "that") +
+                                         ": " + (d.error || r.status); return; }
+    const img = /^image\//.test(file.type);
+    /* a screenshot is only ever "image.png", so it goes by its timestamp */
+    const short = /^image\.(png|jpe?g|gif|webp)$/i.test(file.name || "") || !file.name
+                  ? d.short.split("/").pop() : file.name;
+    let tag = "[" + short + "]", n = 2;
+    while(shots.some(sh => sh.tag === tag)) tag = "[" + short + " " + (n++) + "]";
+    shots.push({path: d.path, short: short, tag: tag, url: img ? URL.createObjectURL(file) : "",
+                ext: (short.includes(".") ? short.split(".").pop() : "file").slice(0, 4)});
+    const a = msg.selectionStart, b = msg.selectionEnd, v = msg.value;   /* at the caret */
+    const pre = v.slice(0, a), put = (pre && !/\s$/.test(pre) ? " " : "") + tag + " ";
+    msg.value = pre + put + v.slice(b).replace(/^ /, "");
+    msg.setSelectionRange(a + put.length, a + put.length);
     msg.focus(); drawShots(); grow();
-  }catch(e){ $("#note2").textContent = "upload failed"; }
+  }catch(e){ $("#note2").textContent = "could not attach " + (file.name || "that") +
+                                      " - a folder cannot be attached"; }
 }
 
 function grow(){ msg.style.height = "auto"; msg.style.height = msg.scrollHeight + "px"; }
+
+/* ---------- `/` commands ---------- */
+/* Type `/` at the start of the box and it offers what that session can run, the
+   way Claude Code's own prompt does: the built-in commands, then the skills and
+   custom commands its transcript says it loaded - so a project's own skills show
+   up only for sessions in that project. */
+const C = {list:[], sid:null, hits:[], sel:0, q:"", on:false};
+
+async function loadCommands(){
+  const sid = S.sid;
+  if(sid !== C.sid){ C.list = []; C.sid = sid; }
+  if(!sid) return;
+  try{
+    const d = await (await fetch("/api/talk/commands?sid=" + sid)).json();
+    if(S.sid === sid) C.list = d.commands || [];
+  }catch(e){}
+}
+
+/* the word being typed, if the caret sits in a leading `/word` - not a path */
+function cmdQuery(){
+  if(!canTalk() || msg.selectionStart !== msg.selectionEnd) return null;
+  const m = /^\/([^\s\/]*)$/.exec(msg.value.slice(0, msg.selectionStart));
+  return m ? m[1].toLowerCase() : null;
+}
+
+/* the exact name > name prefix (with or without its plugin: part) > anywhere in
+   the name > anywhere in the description; ties keep list order, so built-ins
+   come first - but `/loop` typed out still means the loop skill, not /loops */
+function cmdRank(c, q){
+  if(!q) return 0;
+  const n = c.name.toLowerCase();
+  return n === q ? 0 : n.startsWith(q) || n.split(":").pop().startsWith(q) ? 1
+       : n.includes(q) ? 2 : (c.desc || "").toLowerCase().includes(q) ? 3 : -1;
+}
+
+function cmdMenu(){
+  const q = cmdQuery();
+  if(q === null){ cmdHide(); return; }
+  C.q = q; C.sel = 0;
+  C.hits = C.list.map(c => [cmdRank(c, q), c]).filter(x => x[0] >= 0)
+                 .sort((a,b) => a[0] - b[0]).map(x => x[1]);
+  if(!C.hits.length){ cmdHide(); return; }    /* nothing to offer: enter just sends */
+  cmdDraw();
+}
+
+function cmdHide(){ C.on = false; C.hits = []; $("#cmds").classList.remove("on"); }
+
+function cmdDraw(){
+  const box = $("#cmds"), ls = box.querySelector(".ls"), q = C.q;
+  C.on = true; box.classList.add("on");
+  ls.innerHTML = "";
+  C.hits.slice(0, 80).forEach((c, i) => {
+    const n = c.name, at = q ? n.toLowerCase().indexOf(q) : -1;
+    const el = document.createElement("div");
+    el.className = "ci" + (i === C.sel ? " sel" : "");
+    el.title = c.desc || "";
+    el.innerHTML = '<span class="cn">/' + (at < 0 ? esc(n)
+        : esc(n.slice(0, at)) + "<b>" + esc(n.slice(at, at + q.length)) + "</b>" +
+          esc(n.slice(at + q.length))) + '</span>' +
+      '<span class="cd">' + esc(c.desc || "") + '</span>' +
+      '<span class="ck">' + (c.kind === "built-in" ? "built-in"
+                             : n.includes(":") ? "plugin" : "skill") + '</span>';
+    el.onmousedown = ev => {             /* mousedown, so the box keeps its focus */
+      ev.preventDefault(); C.sel = i; cmdPick(true);
+    };
+    ls.appendChild(el);
+  });
+  const on = ls.children[C.sel];
+  if(on) on.scrollIntoView({block:"nearest"});
+}
+
+/* Tab (or a click) fills the name in and leaves room for arguments. Enter runs
+   it - but only once the name is typed out in full, so a half-typed `/co` never
+   fires /compact into someone's pane: the first enter completes it, the second
+   runs it. */
+function cmdPick(fill){
+  const c = C.hits[C.sel];
+  if(!c) return;
+  const rest = msg.value.slice(msg.selectionStart).replace(/^\S*\s*/, "");
+  if(!fill && C.q === c.name.toLowerCase()){ cmdHide(); say(); return; }
+  msg.value = "/" + c.name + (fill ? " " + rest : rest ? " " + rest : "");
+  const at = c.name.length + 1 + (fill ? 1 : 0);
+  msg.setSelectionRange(at, at);
+  msg.focus(); grow();
+  if(fill) cmdHide(); else cmdMenu();
+}
 
 async function screen(force){
   if(!S.sid || (!$("#scr").classList.contains("open") && !force)) return;
@@ -682,18 +1148,42 @@ async function screen(force){
   }catch(e){}
 }
 
-msg.addEventListener("input", grow);
-msg.addEventListener("keydown", e => {
-  if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); say(); }
+msg.addEventListener("input", () => {
+  /* a Chinese or Japanese keyboard types 、 or ／ for the / key - as the first
+     thing in the box, that can only mean a command */
+  if(msg.value === "\u3001" || msg.value === "\uff0f"){ msg.value = "/"; msg.setSelectionRange(1, 1); }
+  grow(); cmdMenu();
 });
+msg.addEventListener("keydown", e => {
+  if(C.on && !e.isComposing){
+    if(e.key === "ArrowDown" || e.key === "ArrowUp"){
+      e.preventDefault();
+      C.sel = (C.sel + (e.key === "ArrowDown" ? 1 : C.hits.length - 1)) % C.hits.length;
+      cmdDraw(); return;
+    }
+    if(e.key === "Tab"){ e.preventDefault(); cmdPick(true); return; }
+    if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); cmdPick(false); return; }
+    if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); cmdHide(); return; }
+  }
+  if(e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); say(); }
+});
+msg.addEventListener("keyup", e => {                /* the caret moved without typing */
+  if(["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) cmdMenu();
+});
+msg.addEventListener("click", cmdMenu);
+msg.addEventListener("focus", loadCommands);        /* /reload-skills may have added some */
+msg.addEventListener("blur", cmdHide);
+$("#cmds").addEventListener("mousedown", e => e.preventDefault());   /* keep focus */
 msg.addEventListener("paste", e => {
   for(const it of (e.clipboardData || {}).items || [])
     if(it.kind === "file"){ e.preventDefault(); stash(it.getAsFile()); }
 });
 msg.addEventListener("dragover", e => e.preventDefault());
-msg.addEventListener("drop", e => {
-  const f = (e.dataTransfer.files || [])[0];
-  if(f && /^image\//.test(f.type)){ e.preventDefault(); stash(f); }
+msg.addEventListener("drop", async e => {
+  const fs = [...(e.dataTransfer.files || [])];
+  if(!fs.length) return;
+  e.preventDefault();
+  for(const f of fs) await stash(f);            /* in order, so the tags are too */
 });
 $("#bSend").onclick = () => say();
 $("#kEsc").onclick = () => say({key:"esc"});
@@ -707,6 +1197,177 @@ $("#scrCap").onclick = () => {
 };
 try{ if(localStorage.getItem("nightshift.screen") === "1") $("#scr").classList.add("open"); }
 catch(e){}
+
+/* ---------- questions ---------- */
+/* When Claude asks (the AskUserQuestion tool) the whole question is already in
+   the transcript - every tab, option and description - while the session waits.
+   This draws it the way Claude Code does and sends your picks to the server,
+   which works the dialog in the pane key by key, reading the screen after each,
+   and presses Submit only if Claude Code's review screen matches. */
+const escA = s => esc(s).replace(/"/g, "&quot;");
+
+function askDone(i){
+  const q = S.ask.qs[i], p = S.ask.picks[i];
+  return q.multiSelect ? p.opts.size > 0 || !!p.other : p.opts.size + (p.other ? 1 : 0) === 1;
+}
+function askSays(i){                          /* what the review will list */
+  const q = S.ask.qs[i], p = S.ask.picks[i];
+  return [...p.opts].sort((a,b) => a - b).map(k => (q.options[k] || {}).label)
+           .concat(p.other ? [p.other] : []).join(", ");
+}
+
+const askKey = A => JSON.stringify([A.id, A.i, A.err, A.busy, A.sent,
+                                    A.picks.map(p => [[...p.opts], p.other])]);
+
+function askDraw(){
+  const box = $("#ask"), A = S.ask;
+  if(!A || !canTalk()){ box.style.display = "none"; box.innerHTML = ""; box._key = ""; return; }
+  const key = askKey(A);
+  if(box._key === key) return;                  /* polls redraw nothing */
+  box._key = key;
+  box.style.display = "";
+  const qs = A.qs, last = qs.length;
+  let h = '<div class="atabs">' + qs.map((q, i) =>
+      '<span class="at' + (i === A.i ? " on" : "") + (askDone(i) ? " ok" : "") + '" data-i="' + i + '">' +
+      (askDone(i) ? "\u2612 " : "\u2610 ") + esc(q.header || "Q" + (i + 1)) + '</span>').join("") +
+    '<span class="at' + (A.i === last ? " on" : "") + '" data-i="' + last + '">\u2714 Submit</span></div>';
+  if(A.i < last){
+    const q = qs[A.i], p = A.picks[A.i], multi = !!q.multiSelect, type = multi ? "checkbox" : "radio";
+    const opts = q.options || [];
+    h += '<div class="aq"><span>' + inline(q.question || "") + '</span><span class="ak">' +
+         (multi ? "choose any" : "choose one") + '</span></div>' +
+      opts.map((o, k) => '<label class="ao' + (p.opts.has(k) ? " on" : "") + '">' +
+        '<input type="' + type + '" name="ao" data-k="' + k + '"' + (p.opts.has(k) ? " checked" : "") + '>' +
+        '<span class="an">' + (k + 1) + '.</span><span><b>' + esc(o.label) + '</b>' +
+        (o.description ? '<span class="ad">' + esc(o.description) + '</span>' : "") + '</span></label>').join("") +
+      '<label class="ao' + (p.other ? " on" : "") + '"><input type="' + type + '" name="ao" data-k="o"' +
+        (p.other ? " checked" : "") + '><span class="an">' + (opts.length + 1) + '.</span>' +
+        '<input class="ot" type="text" placeholder="Type something" value="' + escA(p.other) + '"></label>';
+    const pv = !multi && p.opts.size ? (opts[[...p.opts][0]] || {}).preview : "";
+    if(pv) h += '<pre class="apv">' + esc(pv) + '</pre>';
+  } else {
+    h += '<div class="aq"><span>Review your answers</span></div>' + qs.map((q, i) =>
+      '<div class="ar"><span class="rq">\u25cf ' + esc(q.question) + '</span><span class="ra' +
+      (askDone(i) || q.multiSelect ? "" : " none") + '">\u2192 ' +
+      esc(askSays(i) || (q.multiSelect ? "(none)" : "needs an answer")) + '</span></div>').join("");
+  }
+  h += '<div class="afoot">' + (A.i > 0 ? '<button data-go="-1">back</button>' : "") +
+       (A.i < last ? '<button class="pri" data-go="1">next</button>'
+                   : '<button class="pri" id="askSend"' + (A.busy || A.sent ? " disabled" : "") + '>' +
+                     (A.busy ? "answering\u2026" : "submit answers") + '</button>') +
+       '<span class="anote' + (A.err ? " warn" : "") + '">' + esc(A.err ||
+         (A.sent ? "sent - waiting for Claude to take it" : A.busy ? "working the dialog in its pane" : "")) +
+       '</span></div>';
+  const ot = document.activeElement && document.activeElement.classList.contains("ot");
+  box.innerHTML = h;
+  if(ot){ const t = box.querySelector(".ot"); if(t){ t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }
+}
+
+function askGo(i){
+  const A = S.ask;
+  A.i = Math.max(0, Math.min(A.qs.length, i)); A.err = ""; askDraw();
+}
+
+$("#ask").addEventListener("click", e => {
+  const A = S.ask; if(!A) return;
+  const tab = e.target.closest(".at");
+  if(tab){ askGo(+tab.dataset.i); return; }
+  const go = e.target.closest("[data-go]");
+  if(go){ askGo(A.i + +go.dataset.go); return; }
+  if(e.target.id === "askSend") askSend();
+});
+$("#ask").addEventListener("change", e => {
+  const A = S.ask, k = e.target.dataset && e.target.dataset.k;
+  if(!A || k === undefined) return;
+  const q = A.qs[A.i], p = A.picks[A.i], on = e.target.checked;
+  if(k === "o"){
+    if(!q.multiSelect){ p.opts.clear(); }
+    if(!on) p.other = "";
+    askDraw();
+    if(on) setTimeout(() => { const t = $("#ask .ot"); if(t) t.focus(); }, 0);
+    return;
+  }
+  if(q.multiSelect){ on ? p.opts.add(+k) : p.opts.delete(+k); askDraw(); return; }
+  p.opts = new Set([+k]); p.other = "";          /* one answer, and on to the next, */
+  askDraw(); setTimeout(() => askGo(A.i + 1), 160);   /* the way Claude Code does it */
+});
+/* typing updates in place - a redraw mid-word would break a Chinese IME */
+$("#ask").addEventListener("input", e => {
+  if(!e.target.classList.contains("ot")) return;
+  const A = S.ask, q = A.qs[A.i], p = A.picks[A.i], box = $("#ask");
+  p.other = e.target.value.replace(/^\s+/, "");
+  if(!q.multiSelect && p.other) p.opts.clear();
+  box.querySelectorAll("input[name=ao]").forEach(inp => {
+    inp.checked = inp.dataset.k === "o" ? !!p.other : p.opts.has(+inp.dataset.k);
+    inp.closest(".ao").classList.toggle("on", inp.checked);
+  });
+  const tab = box.querySelector('.at[data-i="' + A.i + '"]');
+  if(tab){ tab.classList.toggle("ok", askDone(A.i));
+           tab.textContent = (askDone(A.i) ? "\u2612 " : "\u2610 ") + (q.header || "Q" + (A.i + 1)); }
+  box._key = askKey(A);                         /* so a poll does not redraw either */
+});
+$("#ask").addEventListener("keydown", e => {
+  if(e.target.classList.contains("ot") && e.key === "Enter" && !e.isComposing){
+    e.preventDefault(); askGo(S.ask.i + 1);
+  }
+});
+
+async function askSend(){
+  const A = S.ask;
+  const missing = A.qs.findIndex((q, i) => !q.multiSelect && !askDone(i));
+  if(missing >= 0){ A.i = missing; A.err = "this one needs an answer"; askDraw(); return; }
+  A.busy = true; A.err = ""; askDraw();
+  $("#scr").classList.add("open"); screen(true);   /* watch it happen */
+  try{
+    const r = await fetch("/api/talk/answer", {method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({sid: S.sid, id: A.id,
+        picks: A.picks.map(p => ({opts: [...p.opts].sort((a,b) => a - b), other: p.other.trim()}))})});
+    const d = await r.json();
+    if(S.ask !== A) return;
+    if(r.ok) A.sent = true; else A.err = d.error || String(r.status);
+  }catch(e){ if(S.ask === A) A.err = "server unreachable"; }
+  A.busy = false; askDraw(); screen(true);
+}
+
+/* ---------- restart to update ---------- */
+/* One button for "Restart to update": the server types /exit into the pane,
+   waits for it to go, then `claude --resume <id>` at the shell - the same
+   conversation on the new version, and talk follows it back. It ends a process,
+   so the first click only arms it; a second within 4s runs it. */
+function updButton(){
+  const b = $("#bUpd"), r = S.row;
+  const show = U.busy || !!(r && r.live && r.update && r.pane && r.kind === "interactive");
+  b.style.display = show ? "" : "none";
+  if(!show || U.busy) return;
+  const armed = Date.now() - U.arm < 4000;
+  b.classList.toggle("arm", armed);
+  b.textContent = armed ? "restart it?" : "\u21bb update";
+  b.title = "runs " + r.version + ", " + r.update + " is installed - /exit, then " +
+            "claude --resume in its pane: same conversation, new version";
+}
+
+$("#bUpd").onclick = async () => {
+  if(U.busy || !S.row) return;
+  if(Date.now() - U.arm >= 4000){
+    U.arm = Date.now(); updButton(); setTimeout(updButton, 4050); return;
+  }
+  U.arm = 0; U.busy = true;
+  const b = $("#bUpd"), sid = S.sid, to = S.row.update;
+  b.disabled = true; b.classList.remove("arm"); b.textContent = "restarting\u2026";
+  $("#scr").classList.add("open"); screen(true);      /* watch it go and come back */
+  let err = "";
+  try{
+    const r = await fetch("/api/talk/restart", {method:"POST",
+      headers:{"Content-Type":"application/json"}, body: JSON.stringify({sid: sid})});
+    if(!r.ok) err = (await r.json()).error || String(r.status);
+  }catch(e){ err = "server unreachable"; }
+  U.busy = false; b.disabled = false; U.hold = err ? 0 : Date.now() + 20000;
+  $("#note2").className = "note2" + (err ? " warn" : "");
+  $("#note2").textContent = err ? "could not restart: " + err
+                                : "restarting on " + to + " - same conversation, talk follows it";
+  updButton(); screen(true); loadSessions();
+};
 
 /* ---------- controls ---------- */
 const toggle = (btn, cls) => {
@@ -785,6 +1446,8 @@ loadSessions().then(() => {
   if(first) openSession(first.sid);
 });
 setInterval(loadSessions, 4000);
+setInterval(typing, 1000);
+setInterval(statusLine, 15000);                     /* the reset countdowns */
 setInterval(() => {
   poll(false);
   screen(false);
